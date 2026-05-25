@@ -6,644 +6,551 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MarketBrief">
-<meta name="theme-color" content="#0a0b0e">
+<meta name="theme-color" content="#08090c">
 <title>MarketBrief</title>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@300;400;700&family=Epilogue:wght@300;400;500;600&display=swap" rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-/* ── Reset & Base ─────────────────────────────────── */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* ── Reset ── */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 
 :root {
-  --bg:       #08090c;
-  --bg1:      #0f1116;
-  --bg2:      #161920;
-  --bg3:      #1c2029;
-  --border:   rgba(255,255,255,0.07);
-  --gold:     #c9a96e;
-  --gold2:    #e8c97a;
-  --green:    #4ecba0;
-  --red:      #e05757;
-  --yellow:   #e8c547;
-  --blue:     #5b9cf6;
-  --text:     #cdd1de;
-  --muted:    #505672;
-  --white:    #eef0f7;
+  --bg:   #08090c;
+  --bg1:  #0f1116;
+  --bg2:  #161920;
+  --bg3:  #1c2029;
+  --border: rgba(255,255,255,0.07);
+  --gold:  #c9a96e;
+  --green: #4ecba0;
+  --red:   #e05757;
+  --yellow:#e8c547;
+  --text:  #cdd1de;
+  --muted: #505672;
+  --white: #eef0f7;
   --safe-top: env(safe-area-inset-top, 44px);
   --safe-bot: env(safe-area-inset-bottom, 20px);
+  --safe-l:   env(safe-area-inset-left, 0px);
+  --safe-r:   env(safe-area-inset-right, 0px);
 }
 
-html { font-size: 16px; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Epilogue', sans-serif;
+  font-family: 'Barlow', sans-serif;
   min-height: 100vh;
   min-height: -webkit-fill-available;
   overflow-x: hidden;
 }
 
-/* Subtle noise grain */
+/* grain overlay */
 body::after {
   content: '';
-  position: fixed; inset: 0; z-index: 9999;
-  pointer-events: none;
-  opacity: 0.025;
+  position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  opacity: 0.02;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* ── API Key Screen ───────────────────────────────── */
+/* ── KEY SCREEN ── */
 #key-screen {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  min-height: 100vh; padding: 32px 24px;
-  gap: 32px;
+  min-height: 100vh; min-height: -webkit-fill-available;
+  padding: 40px 24px; gap: 28px;
 }
-
-#key-screen .logo {
-  font-family: 'Playfair Display', serif;
-  font-size: 42px; font-weight: 300;
-  color: var(--white); letter-spacing: -1px;
+.key-logo {
+  font-family: 'Libre Baskerville', serif;
+  font-size: 38px; font-weight: 400;
+  color: var(--white); letter-spacing: -0.5px; line-height: 1;
 }
-#key-screen .logo span { color: var(--gold); }
-
-#key-screen p {
+.key-logo em { color: var(--gold); font-style: italic; }
+.key-sub {
   font-family: 'DM Mono', monospace;
-  font-size: 11px; color: var(--muted);
-  text-align: center; line-height: 1.7;
-  letter-spacing: 0.5px;
-  max-width: 300px;
+  font-size: 10px; color: var(--muted);
+  letter-spacing: 2.5px; text-transform: uppercase; text-align: center;
 }
-
-.key-input-wrap {
-  width: 100%; max-width: 360px;
-  display: flex; flex-direction: column; gap: 12px;
-}
-
-.key-input-wrap label {
+.key-form { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 10px; }
+.key-lbl {
   font-family: 'DM Mono', monospace;
-  font-size: 9px; color: var(--muted);
-  letter-spacing: 2px; text-transform: uppercase;
+  font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
 }
-
-.key-input-wrap input {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  color: var(--white);
-  font-family: 'DM Mono', monospace;
-  font-size: 12px;
-  width: 100%;
-  outline: none;
-  -webkit-appearance: none;
+#api-key-input {
+  background: var(--bg2); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px; padding: 16px 18px;
+  color: var(--white); font-family: 'DM Mono', monospace; font-size: 13px;
+  width: 100%; outline: none; -webkit-appearance: none;
   transition: border-color 0.2s;
 }
-.key-input-wrap input:focus { border-color: var(--gold); }
-.key-input-wrap input::placeholder { color: var(--muted); }
-
+#api-key-input:focus { border-color: var(--gold); }
+#api-key-input::placeholder { color: var(--muted); }
 .btn-primary {
-  background: var(--gold);
-  color: #0a0b0e;
-  border: none;
-  border-radius: 10px;
-  padding: 15px;
-  font-family: 'Epilogue', sans-serif;
-  font-size: 14px; font-weight: 600;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  -webkit-appearance: none;
-  transition: opacity 0.2s;
+  background: var(--gold); color: #08090c;
+  border: none; border-radius: 14px;
+  padding: 17px; font-family: 'Barlow', sans-serif;
+  font-size: 15px; font-weight: 600; letter-spacing: 0.2px;
+  cursor: pointer; -webkit-appearance: none;
+  transition: transform 0.1s, opacity 0.1s;
 }
-.btn-primary:active { opacity: 0.8; }
-
+.btn-primary:active { transform: scale(0.97); opacity: 0.9; }
 .hint-link {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px; color: var(--gold);
-  text-decoration: none;
-  text-align: center;
-  letter-spacing: 0.5px;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--gold); text-decoration: none;
+  text-align: center; letter-spacing: 0.5px;
 }
 
-/* ── Loading Screen ───────────────────────────────── */
+/* ── LOADING SCREEN ── */
 #loading-screen {
   display: none; flex-direction: column;
   align-items: center; justify-content: center;
-  min-height: 100vh; gap: 28px;
+  min-height: 100vh; gap: 24px;
 }
-
-.spinner-ring {
-  width: 64px; height: 64px; position: relative;
-}
+.spinner-ring { width: 54px; height: 54px; position: relative; }
 .spinner-ring::before, .spinner-ring::after {
-  content: ''; position: absolute; border-radius: 50%;
-  border: 1.5px solid transparent;
+  content: ''; position: absolute; border-radius: 50%; border: 1.5px solid transparent;
 }
-.spinner-ring::before {
-  inset: 0;
-  border-top-color: var(--gold);
-  animation: spin 1s linear infinite;
-}
-.spinner-ring::after {
-  inset: 8px;
-  border-top-color: var(--green);
-  animation: spin 1.4s linear infinite reverse;
-}
+.spinner-ring::before { inset: 0; border-top-color: var(--gold); animation: spin 1s linear infinite; }
+.spinner-ring::after  { inset: 9px; border-top-color: var(--green); animation: spin 1.4s linear infinite reverse; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
 .loading-label {
-  font-family: 'Playfair Display', serif;
-  font-size: 22px; font-weight: 300;
-  color: var(--white);
+  font-family: 'Libre Baskerville', serif;
+  font-size: 21px; font-weight: 400; color: var(--white);
 }
 .loading-sub {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px; color: var(--muted);
-  letter-spacing: 1.5px; text-transform: uppercase;
+  font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted);
+  letter-spacing: 2px; text-transform: uppercase;
   animation: pulse 2s ease infinite;
 }
-@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+@keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:1} }
 
-/* ── Dashboard ────────────────────────────────────── */
-#dashboard {
-  display: none;
-  padding-top: calc(var(--safe-top) + 12px);
-  padding-bottom: calc(var(--safe-bot) + 40px);
-  padding-left: 16px; padding-right: 16px;
-  max-width: 480px; margin: 0 auto;
-}
-
-/* Header */
-.hdr {
-  display: flex; justify-content: space-between;
-  align-items: flex-start;
-  padding: 16px 0 24px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
-  animation: riseUp 0.5s ease both;
-}
-.hdr-left {}
-.hdr-eyebrow {
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; color: var(--muted);
-  letter-spacing: 3px; text-transform: uppercase;
-  margin-bottom: 6px;
-}
-.hdr-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 38px; font-weight: 300;
-  color: var(--white); line-height: 1;
-  letter-spacing: -1px;
-}
-.hdr-title em { color: var(--gold); font-style: normal; }
-.hdr-right { text-align: right; padding-top: 4px; }
-.hdr-date {
-  font-family: 'DM Mono', monospace;
-  font-size: 9px; color: var(--muted);
-  letter-spacing: 1px; margin-bottom: 6px;
-}
-.hdr-sentiment {
-  font-family: 'Playfair Display', serif;
-  font-size: 16px; font-weight: 700;
-}
-.refresh-btn {
-  margin-top: 8px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 10px;
-  color: var(--gold);
-  font-size: 14px;
-  cursor: pointer;
-  -webkit-appearance: none;
-  display: inline-flex; align-items: center;
-  transition: opacity 0.2s;
-}
-.refresh-btn:active { opacity: 0.6; }
-
-/* Alert Banner */
-.alert {
-  background: rgba(224,87,87,0.08);
-  border: 1px solid rgba(224,87,87,0.3);
-  border-radius: 10px;
-  padding: 11px 14px;
-  font-family: 'DM Mono', monospace;
-  font-size: 10px; color: var(--red);
-  letter-spacing: 0.3px; line-height: 1.5;
-  margin-bottom: 14px;
-  display: flex; gap: 8px; align-items: flex-start;
-  animation: riseUp 0.5s 0.05s ease both;
-}
-
-/* Cards */
-.card {
-  background: var(--bg1);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 18px;
-  margin-bottom: 14px;
-}
-
-.card-title {
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; color: var(--muted);
-  letter-spacing: 3px; text-transform: uppercase;
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 16px;
-}
-.card-title::after {
-  content: ''; flex: 1; height: 1px;
-  background: var(--border);
-}
-
-/* Sentiment Bar */
-.sent-bar-wrap { animation: riseUp 0.5s 0.1s ease both; }
-.sent-bar-labels {
-  display: flex; justify-content: space-between;
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; color: var(--muted);
-  letter-spacing: 1px; margin-bottom: 8px;
-}
-.sent-bar-track {
-  height: 6px; background: var(--bg3);
-  border-radius: 3px; overflow: hidden;
-  margin-bottom: 6px;
-}
-.sent-bar-fill {
-  height: 100%; border-radius: 3px;
-  background: linear-gradient(90deg, #7a1a1a, var(--red), var(--yellow), var(--green));
-  transition: width 1.4s cubic-bezier(0.23,1,0.32,1);
-}
-.sent-bar-ends {
-  display: flex; justify-content: space-between;
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; color: var(--muted);
-}
-
-/* Index rows */
-.idx-row {
-  display: flex; justify-content: space-between;
-  align-items: center; padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-}
-.idx-row:last-child { border-bottom: none; }
-.idx-name {
-  font-size: 13px; font-weight: 500; color: var(--white);
-}
-.idx-sub {
-  font-family: 'DM Mono', monospace;
-  font-size: 9px; color: var(--muted); margin-top: 1px;
-}
-.idx-right { text-align: right; }
-.idx-price {
-  font-family: 'DM Mono', monospace;
-  font-size: 13px; font-weight: 500; color: var(--white);
-}
-.pos { color: var(--green); }
-.neg { color: var(--red); }
-.neu { color: var(--yellow); }
-.idx-chg {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px; margin-top: 1px;
-}
-
-/* Crypto grid */
-.crypto-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.crypto-cell {
-  background: var(--bg2); border-radius: 10px;
-  padding: 12px 10px;
-}
-.crypto-sym {
-  font-family: 'DM Mono', monospace;
-  font-size: 9px; color: var(--gold);
-  letter-spacing: 0.5px; margin-bottom: 4px;
-}
-.crypto-price {
-  font-family: 'Playfair Display', serif;
-  font-size: 17px; color: var(--white);
-  line-height: 1.1; margin-bottom: 3px;
-}
-.crypto-chg {
-  font-family: 'DM Mono', monospace;
-  font-size: 9px; margin-bottom: 6px;
-}
-.mini-bar { height: 2px; background: var(--bg); border-radius: 1px; overflow: hidden; margin-bottom: 5px; }
-.mini-fill { height: 100%; border-radius: 1px; }
-.crypto-note {
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; color: var(--muted); line-height: 1.3;
-}
-
-/* Stocks grid */
-.stocks-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-}
-.stock-cell {
-  background: var(--bg2); border-radius: 8px;
-  padding: 9px 11px;
-  display: flex; justify-content: space-between; align-items: center;
-}
-.stock-name { font-size: 12px; color: var(--text); }
-.stock-chg { font-family: 'DM Mono', monospace; font-size: 10px; }
-
-/* Macro list */
-.macro-list { list-style: none; }
-.macro-item {
-  display: flex; justify-content: space-between;
-  align-items: center; padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.macro-item:last-child { border-bottom: none; }
-.macro-key { font-size: 12px; color: var(--muted); }
-.macro-val { font-family: 'DM Mono', monospace; font-size: 11px; }
-
-/* Tags / Topics */
-.tag-cloud {
-  display: flex; flex-wrap: wrap; gap: 7px;
-}
-.tag {
-  font-family: 'DM Mono', monospace;
-  font-size: 9px; padding: 4px 9px;
-  border-radius: 20px;
-  letter-spacing: 0.3px;
-}
-.tag-pos { color: var(--green); border: 1px solid rgba(78,203,160,0.35); background: rgba(78,203,160,0.05); }
-.tag-neg { color: var(--red);   border: 1px solid rgba(224,87,87,0.35);  background: rgba(224,87,87,0.05); }
-.tag-neu { color: var(--yellow);border: 1px solid rgba(232,197,71,0.35); background: rgba(232,197,71,0.05); }
-
-/* Risk / Opportunity section */
-.ro-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
-  margin-bottom: 8px; margin-top: 14px;
-}
-.ro-label:first-child { margin-top: 0; }
-
-/* Recommendation */
-.rec-card {
-  background: linear-gradient(135deg, rgba(224,87,87,0.06), rgba(201,169,110,0.04));
-  border: 1px solid rgba(224,87,87,0.25);
-  border-radius: 14px; padding: 20px;
-  margin-bottom: 14px;
-}
-.rec-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; color: var(--red);
-  letter-spacing: 3px; text-transform: uppercase;
-  margin-bottom: 12px;
-}
-.rec-text {
-  font-family: 'Playfair Display', serif;
-  font-size: 17px; font-weight: 300;
-  color: var(--white); line-height: 1.65;
-}
-.rec-text strong { color: var(--gold); font-weight: 700; }
-
-/* Footer */
-.footer {
-  text-align: center; padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-.footer-updated {
-  font-family: 'DM Mono', monospace;
-  font-size: 9px; color: var(--muted); margin-bottom: 4px;
-}
-.footer-legal {
-  font-family: 'DM Mono', monospace;
-  font-size: 8px; color: rgba(80,86,114,0.5);
-  letter-spacing: 0.5px;
-}
-
-/* Error screen */
+/* ── ERROR SCREEN ── */
 #error-screen {
   display: none; flex-direction: column;
   align-items: center; justify-content: center;
-  min-height: 100vh; gap: 24px; padding: 32px;
+  min-height: 100vh; gap: 20px; padding: 32px;
 }
-.err-icon { font-size: 48px; }
+.err-icon { font-size: 42px; }
 .err-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 24px; color: var(--white);
+  font-family: 'Libre Baskerville', serif;
+  font-size: 22px; color: var(--white);
 }
 .err-msg {
-  font-family: 'DM Mono', monospace;
-  font-size: 11px; color: var(--muted);
+  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted);
   text-align: left; line-height: 1.7;
   width: 100%; max-width: 320px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 200px;
-  overflow-y: auto;
+  background: var(--bg2); border: 1px solid rgba(224,87,87,0.2);
+  border-radius: 12px; padding: 14px;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 180px; overflow-y: auto;
 }
 .btn-retry {
-  background: var(--gold); color: #0a0b0e;
-  border: none; border-radius: 10px;
-  padding: 13px 28px;
-  font-family: 'Epilogue', sans-serif;
-  font-size: 14px; font-weight: 600;
+  background: var(--gold); color: #08090c; border: none;
+  border-radius: 14px; padding: 15px 32px;
+  font-family: 'Barlow', sans-serif; font-size: 15px; font-weight: 600;
   cursor: pointer; -webkit-appearance: none;
 }
-
-/* Card entrance animations */
-.card, .sent-bar-wrap, .rec-card, .alert {
-  opacity: 0;
-  animation: riseUp 0.5s ease forwards;
-}
-.card:nth-child(1)  { animation-delay: 0.10s; }
-.card:nth-child(2)  { animation-delay: 0.15s; }
-.card:nth-child(3)  { animation-delay: 0.20s; }
-.card:nth-child(4)  { animation-delay: 0.25s; }
-.card:nth-child(5)  { animation-delay: 0.30s; }
-.card:nth-child(6)  { animation-delay: 0.35s; }
-.card:nth-child(7)  { animation-delay: 0.40s; }
-.card:nth-child(8)  { animation-delay: 0.45s; }
-.rec-card           { animation-delay: 0.50s; }
-
-@keyframes riseUp {
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* PWA install banner */
-#install-banner {
-  display: none;
-  position: fixed; bottom: calc(var(--safe-bot) + 16px);
-  left: 16px; right: 16px;
-  background: var(--bg2);
-  border: 1px solid var(--gold);
-  border-radius: 14px; padding: 14px 16px;
-  z-index: 100;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-}
-.install-inner {
-  display: flex; align-items: center; gap: 12px;
-}
-.install-icon { font-size: 28px; }
-.install-text { flex: 1; }
-.install-text strong {
-  display: block; color: var(--white);
-  font-size: 13px; font-weight: 600; margin-bottom: 2px;
-}
-.install-text span {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px; color: var(--muted);
-}
-.install-close {
+.btn-key-reset {
   background: none; border: none;
-  color: var(--muted); font-size: 18px; cursor: pointer;
-  padding: 4px;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--muted); cursor: pointer; letter-spacing: 0.5px;
+  margin-top: -8px;
 }
 
-/* Separator */
-.sep { height: 1px; background: var(--border); margin: 10px 0; }
+/* ── DASHBOARD ── */
+#dashboard {
+  display: none;
+  padding-bottom: calc(var(--safe-bot) + 48px);
+  padding-left: calc(var(--safe-l) + 16px);
+  padding-right: calc(var(--safe-r) + 16px);
+}
+
+/* sticky topbar */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,9,12,0.9);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  margin: 0 -16px; padding: 0 16px;
+  padding-top: var(--safe-top);
+}
+.topbar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0 12px;
+}
+.topbar-eyebrow {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--muted); letter-spacing: 3px; text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.topbar-title {
+  font-family: 'Libre Baskerville', serif;
+  font-size: 22px; font-weight: 400; color: var(--white);
+  line-height: 1; letter-spacing: -0.3px;
+}
+.topbar-title em { color: var(--gold); font-style: italic; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+#hdr-sentiment {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.5px;
+}
+.refresh-btn {
+  width: 36px; height: 36px; flex-shrink: 0;
+  background: var(--bg2); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; color: var(--gold); font-size: 16px;
+  cursor: pointer; -webkit-appearance: none;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.15s;
+}
+.refresh-btn:active { opacity: 0.5; }
+.refresh-btn:disabled { opacity: 0.3; }
+
+/* content stream */
+.stream {
+  padding-top: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* date line */
+#hdr-date {
+  font-family: 'DM Mono', monospace; font-size: 9px;
+  color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase;
+  padding-top: 2px;
+}
+
+/* alert pill */
+.alert {
+  background: rgba(224,87,87,0.08); border: 1px solid rgba(224,87,87,0.28);
+  border-radius: 12px; padding: 11px 14px;
+  display: flex; align-items: flex-start; gap: 8px;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--red); line-height: 1.5; letter-spacing: 0.2px;
+}
+.alert span:first-child { flex-shrink: 0; margin-top: 1px; }
+
+/* cards */
+.card {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 18px; overflow: hidden;
+}
+.card-title {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 16px 0;
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--muted); letter-spacing: 3px; text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.card-body { padding: 4px 16px 14px; }
+
+/* sentiment bar */
+.sent-wrap { padding: 14px 16px; }
+.sent-bar-wrap { padding: 0; background: none; border: none; border-radius: 0; }
+.sent-bar-labels {
+  display: flex; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.sent-bar-labels span, .sent-bar-score {
+  font-family: 'DM Mono', monospace; font-size: 9px;
+  color: var(--muted); letter-spacing: 1px; text-transform: uppercase;
+}
+.sent-bar-track {
+  height: 5px; background: var(--bg3);
+  border-radius: 3px; overflow: hidden; margin-bottom: 7px;
+}
+.sent-bar-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, #6b0f0f, var(--red) 30%, var(--yellow) 65%, var(--green));
+  transition: width 1.2s cubic-bezier(0.23,1,0.32,1);
+}
+.sent-bar-ends {
+  display: flex; justify-content: space-between;
+}
+.sent-bar-ends span {
+  font-family: 'DM Mono', monospace; font-size: 8px; color: var(--muted);
+}
+
+/* index rows */
+.idx-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 0; border-bottom: 1px solid var(--border); min-height: 52px;
+}
+.idx-row:last-child { border-bottom: none; }
+.idx-name { font-size: 14px; font-weight: 500; color: var(--white); line-height: 1.2; }
+.idx-sub  { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); margin-top: 2px; }
+.idx-right { text-align: right; flex-shrink: 0; padding-left: 12px; }
+.idx-price { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--white); }
+.idx-chg   { font-family: 'DM Mono', monospace; font-size: 11px; margin-top: 2px; }
+
+/* crypto — list rows instead of 3-col grid */
+.crypto-grid { display: flex; flex-direction: column; }
+.crypto-cell {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.crypto-cell:last-child { border-bottom: none; }
+.crypto-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--bg3); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500;
+  color: var(--gold); text-align: center; letter-spacing: 0; line-height: 1.2;
+}
+.crypto-mid { flex: 1; min-width: 0; }
+.crypto-sym  { font-size: 14px; font-weight: 500; color: var(--white); }
+.crypto-note { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); margin-top: 2px; }
+.mini-bar { height: 2px; background: var(--bg3); border-radius: 1px; margin-top: 5px; overflow: hidden; }
+.mini-fill { height: 100%; border-radius: 1px; }
+.crypto-right { text-align: right; flex-shrink: 0; }
+.crypto-price { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--white); }
+.crypto-chg   { font-family: 'DM Mono', monospace; font-size: 11px; margin-top: 2px; }
+
+/* stocks grid */
+.stocks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stock-cell {
+  background: var(--bg2); border-radius: 12px;
+  padding: 12px 14px; min-height: 58px;
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+}
+.stock-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.stock-chg  { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; }
+
+/* macro list */
+.macro-list { list-style: none; }
+.macro-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 0; border-bottom: 1px solid var(--border); min-height: 44px;
+}
+.macro-item:last-child { border-bottom: none; }
+.macro-key { font-size: 13px; color: var(--muted); }
+.macro-val { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; text-align: right; }
+
+/* tags */
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
+.tag { font-family: 'DM Mono', monospace; font-size: 10px; padding: 6px 11px; border-radius: 20px; letter-spacing: 0.2px; line-height: 1; }
+.tag-pos { color: var(--green); border: 1px solid rgba(78,203,160,0.3); background: rgba(78,203,160,0.06); }
+.tag-neg { color: var(--red);   border: 1px solid rgba(224,87,87,0.3);  background: rgba(224,87,87,0.06); }
+.tag-neu { color: var(--yellow);border: 1px solid rgba(232,197,71,0.3); background: rgba(232,197,71,0.06); }
+
+/* risk/opp */
+.ro-label {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  letter-spacing: 2.5px; text-transform: uppercase; margin-bottom: 9px;
+}
+.ro-section + .ro-section { margin-top: 16px; }
+
+/* recommendation */
+.rec-box {
+  background: linear-gradient(145deg, rgba(224,87,87,0.06), rgba(201,169,110,0.03));
+  border: 1px solid rgba(224,87,87,0.22);
+  border-radius: 18px; padding: 20px;
+}
+.rec-title {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--red); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px;
+}
+.rec-text {
+  font-family: 'Libre Baskerville', serif;
+  font-size: 16px; font-weight: 400;
+  color: var(--white); line-height: 1.7;
+}
+.rec-text strong { color: var(--gold); font-weight: 700; }
+
+/* footer */
+.footer-updated {
+  font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted);
+  text-align: center; margin-bottom: 4px;
+}
+.footer-legal {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: rgba(80,86,114,0.45); letter-spacing: 0.5px; text-align: center;
+}
+.sep { height: 1px; background: var(--border); margin: 4px 0 12px; }
+
+/* install banner */
+#install-banner {
+  display: none; position: fixed;
+  bottom: calc(var(--safe-bot) + 12px); left: 16px; right: 16px;
+  background: var(--bg2); border: 1px solid rgba(201,169,110,0.35);
+  border-radius: 16px; padding: 14px 16px; z-index: 200;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+}
+.install-inner { display: flex; align-items: center; gap: 12px; }
+.install-icon  { font-size: 26px; flex-shrink: 0; }
+.install-text  { flex: 1; }
+.install-text strong { display: block; color: var(--white); font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.install-text span   { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); }
+.install-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 4px; flex-shrink: 0; }
+
+/* helpers */
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+.neu { color: var(--yellow); }
+
+/* animations */
+@keyframes riseUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+.card, .rec-box, .alert { opacity: 0; animation: riseUp 0.45s ease forwards; }
+.card:nth-child(1){animation-delay:0.05s} .card:nth-child(2){animation-delay:0.10s}
+.card:nth-child(3){animation-delay:0.15s} .card:nth-child(4){animation-delay:0.20s}
+.card:nth-child(5){animation-delay:0.25s} .card:nth-child(6){animation-delay:0.30s}
+.card:nth-child(7){animation-delay:0.35s} .card:nth-child(8){animation-delay:0.40s}
+.rec-box{animation-delay:0.45s} .alert{animation-delay:0.02s}
 </style>
 </head>
 <body>
 
-<!-- ── API Key Screen ──────────────────────────── -->
+<!-- KEY SCREEN -->
 <div id="key-screen">
-  <div class="logo">Markt<em>Brief</em></div>
-
-  <p>Gib deinen Anthropic API Key ein.<br>Er wird nur auf deinem Gerät gespeichert.</p>
-
-  <div class="key-input-wrap">
-    <label>Anthropic API Key</label>
-    <input type="password" id="api-key-input"
-           placeholder="sk-ant-api03-..."
-           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-    <button class="btn-primary" onclick="saveKey()">Starten</button>
+  <div class="key-logo">Markt<em>Brief</em></div>
+  <div class="key-sub">KI-gestützte Marktanalyse</div>
+  <div class="key-form">
+    <div class="key-lbl">Anthropic API Key</div>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-…"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <button class="btn-primary" onclick="saveKey()">Starten →</button>
   </div>
-
-  <a class="hint-link" href="https://console.anthropic.com/" target="_blank">
-    → Key holen auf console.anthropic.com
-  </a>
+  <a class="hint-link" href="https://console.anthropic.com/" target="_blank">Key holen → console.anthropic.com</a>
 </div>
 
-<!-- ── Loading Screen ─────────────────────────── -->
+<!-- LOADING SCREEN -->
 <div id="loading-screen">
   <div class="spinner-ring"></div>
   <div class="loading-label">Analyse läuft</div>
-  <div class="loading-sub">KI wertet Märkte aus…</div>
+  <div class="loading-sub">Märkte werden ausgewertet</div>
 </div>
 
-<!-- ── Error Screen ───────────────────────────── -->
+<!-- ERROR SCREEN -->
 <div id="error-screen">
   <div class="err-icon">⚡</div>
   <div class="err-title">Verbindungsfehler</div>
   <div class="err-msg" id="error-msg">Unbekannter Fehler</div>
   <button class="btn-retry" onclick="retryFetch()">Erneut versuchen</button>
-  <button style="background:none;border:none;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;margin-top:-8px;" onclick="resetKey()">API Key ändern</button>
+  <button class="btn-key-reset" onclick="resetKey()">API Key ändern</button>
 </div>
 
-<!-- ── Dashboard ──────────────────────────────── -->
+<!-- DASHBOARD -->
 <div id="dashboard">
-  <div class="hdr">
-    <div class="hdr-left">
-      <div class="hdr-eyebrow">Tägliches Market Brief</div>
-      <div class="hdr-title">Markt<em>analyse</em></div>
-    </div>
-    <div class="hdr-right">
-      <div class="hdr-date" id="hdr-date">—</div>
-      <div class="hdr-sentiment" id="hdr-sentiment">—</div>
-      <button class="refresh-btn" onclick="loadBrief()" id="refresh-btn">↺</button>
-    </div>
-  </div>
 
-  <!-- Alert -->
-  <div class="alert" id="alert-banner" style="display:none">
-    <span>⚠</span>
-    <span id="alert-text"></span>
-  </div>
-
-  <!-- Sentiment -->
-  <div class="card sent-bar-wrap" style="margin-bottom:14px">
-    <div class="sent-bar-labels">
-      <span>Gesamtstimmung</span>
-      <span id="score-label">Score: — / 100</span>
-    </div>
-    <div class="sent-bar-track">
-      <div class="sent-bar-fill" id="sent-fill" style="width:0%"></div>
-    </div>
-    <div class="sent-bar-ends">
-      <span>BEARISH</span><span>NEUTRAL</span><span>BULLISH</span>
+  <!-- Sticky Topbar -->
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <div class="topbar-eyebrow">Daily Market Brief</div>
+        <div class="topbar-title">Markt<em>analyse</em></div>
+      </div>
+      <div class="topbar-right">
+        <div id="hdr-sentiment">—</div>
+        <button class="refresh-btn" id="refresh-btn">↺</button>
+      </div>
     </div>
   </div>
 
-  <!-- US Märkte -->
-  <div class="card">
-    <div class="card-title">🇺🇸 US-Märkte</div>
-    <div id="us-markets"></div>
-  </div>
+  <div class="stream">
 
-  <!-- EU / Rohstoffe -->
-  <div class="card">
-    <div class="card-title">🌍 Europa & Rohstoffe</div>
-    <div id="eu-markets"></div>
-  </div>
+    <div id="hdr-date"></div>
 
-  <!-- Krypto -->
-  <div class="card">
-    <div class="card-title">₿ Kryptomärkte</div>
-    <div class="crypto-grid" id="crypto-grid"></div>
-  </div>
+    <!-- Alert -->
+    <div class="alert" id="alert-banner" style="display:none">
+      <span>⚠</span><span id="alert-text"></span>
+    </div>
 
-  <!-- Einzelwerte -->
-  <div class="card">
-    <div class="card-title">📊 Einzelwerte</div>
-    <div class="stocks-grid" id="stocks-grid"></div>
-  </div>
+    <!-- Sentiment -->
+    <div class="card">
+      <div class="sent-wrap">
+        <div class="sent-bar-labels">
+          <span>Gesamtstimmung</span>
+          <span id="score-label">— / 100</span>
+        </div>
+        <div class="sent-bar-track">
+          <div class="sent-bar-fill" id="sent-fill" style="width:0%"></div>
+        </div>
+        <div class="sent-bar-ends">
+          <span>Bearish</span><span>Neutral</span><span>Bullish</span>
+        </div>
+      </div>
+    </div>
 
-  <!-- Makro -->
-  <div class="card">
-    <div class="card-title">🌐 Makro-Faktoren</div>
-    <ul class="macro-list" id="macro-list"></ul>
-  </div>
+    <!-- US Markets -->
+    <div class="card">
+      <div class="card-title">🇺🇸 US-Märkte</div>
+      <div class="card-body" id="us-markets"></div>
+    </div>
 
-  <!-- Themen -->
-  <div class="card">
-    <div class="card-title">🔥 Top-Themen</div>
-    <div class="tag-cloud" id="topics-cloud"></div>
-  </div>
+    <!-- EU Markets -->
+    <div class="card">
+      <div class="card-title">🌍 Europa &amp; Rohstoffe</div>
+      <div class="card-body" id="eu-markets"></div>
+    </div>
 
-  <!-- Risiken & Chancen -->
-  <div class="card">
-    <div class="card-title">⚖ Risiken & Chancen</div>
-    <div class="ro-label neg">Risiken</div>
-    <div class="tag-cloud" id="risks-cloud"></div>
-    <div class="ro-label pos">Chancen</div>
-    <div class="tag-cloud" id="opps-cloud"></div>
-  </div>
+    <!-- Crypto -->
+    <div class="card">
+      <div class="card-title">₿ Krypto</div>
+      <div class="card-body">
+        <div class="crypto-grid" id="crypto-grid"></div>
+      </div>
+    </div>
 
-  <!-- Empfehlung -->
-  <div class="rec-card">
-    <div class="rec-label">💡 Handlungsempfehlung</div>
-    <div class="rec-text" id="rec-text">—</div>
-  </div>
+    <!-- Stocks -->
+    <div class="card">
+      <div class="card-title">📊 Einzelwerte</div>
+      <div class="card-body">
+        <div class="stocks-grid" id="stocks-grid"></div>
+      </div>
+    </div>
 
-  <div class="footer">
-    <div class="footer-updated" id="footer-updated"></div>
-    <div class="footer-legal">KEIN ANLAGEBERATUNG · MARKET BRIEF</div>
+    <!-- Macro -->
+    <div class="card">
+      <div class="card-title">🌐 Makro</div>
+      <div class="card-body">
+        <ul class="macro-list" id="macro-list"></ul>
+      </div>
+    </div>
+
+    <!-- Topics -->
+    <div class="card">
+      <div class="card-title">🔥 Top-Themen</div>
+      <div class="card-body" style="padding-top:10px">
+        <div class="tag-cloud" id="topics-cloud"></div>
+      </div>
+    </div>
+
+    <!-- Risks & Opps -->
+    <div class="card">
+      <div class="card-title">⚖ Risiken &amp; Chancen</div>
+      <div class="card-body" style="padding-top:12px">
+        <div class="ro-section">
+          <div class="ro-label neg">Risiken</div>
+          <div class="tag-cloud" id="risks-cloud"></div>
+        </div>
+        <div class="ro-section">
+          <div class="ro-label pos">Chancen</div>
+          <div class="tag-cloud" id="opps-cloud"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recommendation -->
+    <div class="rec-box">
+      <div class="rec-title">💡 Handlungsempfehlung</div>
+      <div class="rec-text" id="rec-text">—</div>
+    </div>
+
+    <!-- Footer -->
+    <div>
+      <div class="sep"></div>
+      <div class="footer-updated" id="footer-updated"></div>
+      <div class="footer-legal">KEIN ANLAGEBERATUNG · MARKET BRIEF</div>
+    </div>
+
   </div>
 </div>
 
-<!-- PWA install prompt for Safari/iOS -->
+<!-- Install Banner -->
 <div id="install-banner">
   <div class="install-inner">
     <div class="install-icon">📊</div>
     <div class="install-text">
       <strong>Als App installieren</strong>
-      <span>Teilen → "Zum Home-Bildschirm" tippen</span>
+      <span>Teilen → „Zum Home-Bildschirm"</span>
     </div>
     <button class="install-close" onclick="dismissInstall()">✕</button>
   </div>
@@ -667,7 +574,11 @@ const screens = {
 
 function show(name) {
   Object.values(screens).forEach(s => s.style.display = 'none');
-  screens[name].style.display = 'flex';
+  if (name === 'dash') {
+    screens[name].style.display = 'block';
+  } else {
+    screens[name].style.display = 'flex';
+  }
 }
 
 // ── Init ──────────────────────────────────────────────
@@ -877,7 +788,7 @@ function renderBrief(b) {
 
   // Score bar
   const score = Math.min(100, Math.max(0, b.sentimentScore || 50));
-  document.getElementById('score-label').textContent = `Score: ${score} / 100`;
+  document.getElementById('score-label').textContent = `Score ${score}/100`;
   setTimeout(() => {
     document.getElementById('sent-fill').style.width = score + '%';
   }, 200);
@@ -905,25 +816,33 @@ function renderBrief(b) {
         </div>
       </div>`).join('');
   }
+  // wrap in table container
+  const wrapIdx = html => '<div style="display:flex;flex-direction:column">' + html + '</div>';
 
   document.getElementById('us-markets').innerHTML = buildIndexRows(b.usMarkets);
   document.getElementById('eu-markets').innerHTML = buildIndexRows(b.euMarkets);
 
-  // Crypto
+  // Crypto — list row layout
+  const cryptoAbbr = {'BTC/USD':'BTC','ETH/USD':'ETH','SOL/USD':'SOL'};
   document.getElementById('crypto-grid').innerHTML = (b.crypto || []).map(c => `
     <div class="crypto-cell">
-      <div class="crypto-sym">${esc(c.symbol)}</div>
-      <div class="crypto-price">${esc(c.price)}</div>
-      <div class="crypto-chg ${c.isPositive ? 'pos' : 'neg'}">${esc(c.change)}</div>
-      <div class="mini-bar"><div class="mini-fill" style="width:${(c.barPercent||0)*100}%; background:${c.isPositive ? 'var(--green)' : 'var(--gold)'}"></div></div>
-      <div class="crypto-note">${esc(c.note)}</div>
+      <div class="crypto-icon">${esc(cryptoAbbr[c.symbol] || c.symbol.split('/')[0])}</div>
+      <div class="crypto-mid">
+        <div class="crypto-sym">${esc(c.symbol)}</div>
+        <div class="crypto-note">${esc(c.note)}</div>
+        <div class="mini-bar"><div class="mini-fill" style="width:${(c.barPercent||0)*100}%;background:${c.isPositive?'var(--green)':'var(--gold)'}"></div></div>
+      </div>
+      <div class="crypto-right">
+        <div class="crypto-price">${esc(c.price)}</div>
+        <div class="crypto-chg ${c.isPositive ? 'pos' : 'neg'}">${esc(c.change)}</div>
+      </div>
     </div>`).join('');
 
   // Stocks
   document.getElementById('stocks-grid').innerHTML = (b.stocks || []).map(s => `
     <div class="stock-cell">
-      <span class="stock-name">${esc(s.name)}</span>
-      <span class="stock-chg ${s.isPositive ? 'pos' : 'neg'}">${esc(s.change)}</span>
+      <div class="stock-name">${esc(s.name)}</div>
+      <div class="stock-chg ${s.isPositive ? 'pos' : 'neg'}">${esc(s.change)}</div>
     </div>`).join('');
 
   // Macro
@@ -959,6 +878,7 @@ function renderBrief(b) {
   }
 
   show('dash');
+  document.getElementById('dashboard').style.display = 'block';
   window.scrollTo(0, 0);
 }
 
@@ -996,5 +916,7 @@ function esc(str) {
     .replace(/"/g,'&quot;');
 }
 </script>
+</body>
+</html>
 </body>
 </html>
