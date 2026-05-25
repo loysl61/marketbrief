@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MarketBrief">
+<meta name="theme-color" content="#0a0b0e">
+<title>MarketBrief</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@300;400;700&family=Epilogue:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ── Reset & Base ─────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg:       #08090c;
+  --bg1:      #0f1116;
+  --bg2:      #161920;
+  --bg3:      #1c2029;
+  --border:   rgba(255,255,255,0.07);
+  --gold:     #c9a96e;
+  --gold2:    #e8c97a;
+  --green:    #4ecba0;
+  --red:      #e05757;
+  --yellow:   #e8c547;
+  --blue:     #5b9cf6;
+  --text:     #cdd1de;
+  --muted:    #505672;
+  --white:    #eef0f7;
+  --safe-top: env(safe-area-inset-top, 44px);
+  --safe-bot: env(safe-area-inset-bottom, 20px);
+}
+
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Epilogue', sans-serif;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  overflow-x: hidden;
+}
+
+/* Subtle noise grain */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── API Key Screen ───────────────────────────────── */
+#key-screen {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; padding: 32px 24px;
+  gap: 32px;
+}
+
+#key-screen .logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 42px; font-weight: 300;
+  color: var(--white); letter-spacing: -1px;
+}
+#key-screen .logo span { color: var(--gold); }
+
+#key-screen p {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; color: var(--muted);
+  text-align: center; line-height: 1.7;
+  letter-spacing: 0.5px;
+  max-width: 300px;
+}
+
+.key-input-wrap {
+  width: 100%; max-width: 360px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.key-input-wrap label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; color: var(--muted);
+  letter-spacing: 2px; text-transform: uppercase;
+}
+
+.key-input-wrap input {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: var(--white);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+  -webkit-appearance: none;
+  transition: border-color 0.2s;
+}
+.key-input-wrap input:focus { border-color: var(--gold); }
+.key-input-wrap input::placeholder { color: var(--muted); }
+
+.btn-primary {
+  background: var(--gold);
+  color: #0a0b0e;
+  border: none;
+  border-radius: 10px;
+  padding: 15px;
+  font-family: 'Epilogue', sans-serif;
+  font-size: 14px; font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  transition: opacity 0.2s;
+}
+.btn-primary:active { opacity: 0.8; }
+
+.hint-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--gold);
+  text-decoration: none;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* ── Loading Screen ───────────────────────────────── */
+#loading-screen {
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; gap: 28px;
+}
+
+.spinner-ring {
+  width: 64px; height: 64px; position: relative;
+}
+.spinner-ring::before, .spinner-ring::after {
+  content: ''; position: absolute; border-radius: 50%;
+  border: 1.5px solid transparent;
+}
+.spinner-ring::before {
+  inset: 0;
+  border-top-color: var(--gold);
+  animation: spin 1s linear infinite;
+}
+.spinner-ring::after {
+  inset: 8px;
+  border-top-color: var(--green);
+  animation: spin 1.4s linear infinite reverse;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-label {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px; font-weight: 300;
+  color: var(--white);
+}
+.loading-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--muted);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  animation: pulse 2s ease infinite;
+}
+@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+/* ── Dashboard ────────────────────────────────────── */
+#dashboard {
+  display: none;
+  padding-top: calc(var(--safe-top) + 12px);
+  padding-bottom: calc(var(--safe-bot) + 40px);
+  padding-left: 16px; padding-right: 16px;
+  max-width: 480px; margin: 0 auto;
+}
+
+/* Header */
+.hdr {
+  display: flex; justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  animation: riseUp 0.5s ease both;
+}
+.hdr-left {}
+.hdr-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: var(--muted);
+  letter-spacing: 3px; text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.hdr-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 38px; font-weight: 300;
+  color: var(--white); line-height: 1;
+  letter-spacing: -1px;
+}
+.hdr-title em { color: var(--gold); font-style: normal; }
+.hdr-right { text-align: right; padding-top: 4px; }
+.hdr-date {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; color: var(--muted);
+  letter-spacing: 1px; margin-bottom: 6px;
+}
+.hdr-sentiment {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px; font-weight: 700;
+}
+.refresh-btn {
+  margin-top: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--gold);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  display: inline-flex; align-items: center;
+  transition: opacity 0.2s;
+}
+.refresh-btn:active { opacity: 0.6; }
+
+/* Alert Banner */
+.alert {
+  background: rgba(224,87,87,0.08);
+  border: 1px solid rgba(224,87,87,0.3);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--red);
+  letter-spacing: 0.3px; line-height: 1.5;
+  margin-bottom: 14px;
+  display: flex; gap: 8px; align-items: flex-start;
+  animation: riseUp 0.5s 0.05s ease both;
+}
+
+/* Cards */
+.card {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+.card-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: var(--muted);
+  letter-spacing: 3px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 16px;
+}
+.card-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border);
+}
+
+/* Sentiment Bar */
+.sent-bar-wrap { animation: riseUp 0.5s 0.1s ease both; }
+.sent-bar-labels {
+  display: flex; justify-content: space-between;
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: var(--muted);
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+.sent-bar-track {
+  height: 6px; background: var(--bg3);
+  border-radius: 3px; overflow: hidden;
+  margin-bottom: 6px;
+}
+.sent-bar-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, #7a1a1a, var(--red), var(--yellow), var(--green));
+  transition: width 1.4s cubic-bezier(0.23,1,0.32,1);
+}
+.sent-bar-ends {
+  display: flex; justify-content: space-between;
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: var(--muted);
+}
+
+/* Index rows */
+.idx-row {
+  display: flex; justify-content: space-between;
+  align-items: center; padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.idx-row:last-child { border-bottom: none; }
+.idx-name {
+  font-size: 13px; font-weight: 500; color: var(--white);
+}
+.idx-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; color: var(--muted); margin-top: 1px;
+}
+.idx-right { text-align: right; }
+.idx-price {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px; font-weight: 500; color: var(--white);
+}
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+.neu { color: var(--yellow); }
+.idx-chg {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; margin-top: 1px;
+}
+
+/* Crypto grid */
+.crypto-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.crypto-cell {
+  background: var(--bg2); border-radius: 10px;
+  padding: 12px 10px;
+}
+.crypto-sym {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; color: var(--gold);
+  letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.crypto-price {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px; color: var(--white);
+  line-height: 1.1; margin-bottom: 3px;
+}
+.crypto-chg {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; margin-bottom: 6px;
+}
+.mini-bar { height: 2px; background: var(--bg); border-radius: 1px; overflow: hidden; margin-bottom: 5px; }
+.mini-fill { height: 100%; border-radius: 1px; }
+.crypto-note {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: var(--muted); line-height: 1.3;
+}
+
+/* Stocks grid */
+.stocks-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.stock-cell {
+  background: var(--bg2); border-radius: 8px;
+  padding: 9px 11px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.stock-name { font-size: 12px; color: var(--text); }
+.stock-chg { font-family: 'DM Mono', monospace; font-size: 10px; }
+
+/* Macro list */
+.macro-list { list-style: none; }
+.macro-item {
+  display: flex; justify-content: space-between;
+  align-items: center; padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.macro-item:last-child { border-bottom: none; }
+.macro-key { font-size: 12px; color: var(--muted); }
+.macro-val { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+/* Tags / Topics */
+.tag-cloud {
+  display: flex; flex-wrap: wrap; gap: 7px;
+}
+.tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; padding: 4px 9px;
+  border-radius: 20px;
+  letter-spacing: 0.3px;
+}
+.tag-pos { color: var(--green); border: 1px solid rgba(78,203,160,0.35); background: rgba(78,203,160,0.05); }
+.tag-neg { color: var(--red);   border: 1px solid rgba(224,87,87,0.35);  background: rgba(224,87,87,0.05); }
+.tag-neu { color: var(--yellow);border: 1px solid rgba(232,197,71,0.35); background: rgba(232,197,71,0.05); }
+
+/* Risk / Opportunity section */
+.ro-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 8px; margin-top: 14px;
+}
+.ro-label:first-child { margin-top: 0; }
+
+/* Recommendation */
+.rec-card {
+  background: linear-gradient(135deg, rgba(224,87,87,0.06), rgba(201,169,110,0.04));
+  border: 1px solid rgba(224,87,87,0.25);
+  border-radius: 14px; padding: 20px;
+  margin-bottom: 14px;
+}
+.rec-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: var(--red);
+  letter-spacing: 3px; text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.rec-text {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px; font-weight: 300;
+  color: var(--white); line-height: 1.65;
+}
+.rec-text strong { color: var(--gold); font-weight: 700; }
+
+/* Footer */
+.footer {
+  text-align: center; padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.footer-updated {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; color: var(--muted); margin-bottom: 4px;
+}
+.footer-legal {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: rgba(80,86,114,0.5);
+  letter-spacing: 0.5px;
+}
+
+/* Error screen */
+#error-screen {
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; gap: 24px; padding: 32px;
+}
+.err-icon { font-size: 48px; }
+.err-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px; color: var(--white);
+}
+.err-msg {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; color: var(--muted);
+  text-align: left; line-height: 1.7;
+  width: 100%; max-width: 320px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.btn-retry {
+  background: var(--gold); color: #0a0b0e;
+  border: none; border-radius: 10px;
+  padding: 13px 28px;
+  font-family: 'Epilogue', sans-serif;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; -webkit-appearance: none;
+}
+
+/* Card entrance animations */
+.card, .sent-bar-wrap, .rec-card, .alert {
+  opacity: 0;
+  animation: riseUp 0.5s ease forwards;
+}
+.card:nth-child(1)  { animation-delay: 0.10s; }
+.card:nth-child(2)  { animation-delay: 0.15s; }
+.card:nth-child(3)  { animation-delay: 0.20s; }
+.card:nth-child(4)  { animation-delay: 0.25s; }
+.card:nth-child(5)  { animation-delay: 0.30s; }
+.card:nth-child(6)  { animation-delay: 0.35s; }
+.card:nth-child(7)  { animation-delay: 0.40s; }
+.card:nth-child(8)  { animation-delay: 0.45s; }
+.rec-card           { animation-delay: 0.50s; }
+
+@keyframes riseUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* PWA install banner */
+#install-banner {
+  display: none;
+  position: fixed; bottom: calc(var(--safe-bot) + 16px);
+  left: 16px; right: 16px;
+  background: var(--bg2);
+  border: 1px solid var(--gold);
+  border-radius: 14px; padding: 14px 16px;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.install-inner {
+  display: flex; align-items: center; gap: 12px;
+}
+.install-icon { font-size: 28px; }
+.install-text { flex: 1; }
+.install-text strong {
+  display: block; color: var(--white);
+  font-size: 13px; font-weight: 600; margin-bottom: 2px;
+}
+.install-text span {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--muted);
+}
+.install-close {
+  background: none; border: none;
+  color: var(--muted); font-size: 18px; cursor: pointer;
+  padding: 4px;
+}
+
+/* Separator */
+.sep { height: 1px; background: var(--border); margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<!-- ── API Key Screen ──────────────────────────── -->
+<div id="key-screen">
+  <div class="logo">Markt<em>Brief</em></div>
+
+  <p>Gib deinen Anthropic API Key ein.<br>Er wird nur auf deinem Gerät gespeichert.</p>
+
+  <div class="key-input-wrap">
+    <label>Anthropic API Key</label>
+    <input type="password" id="api-key-input"
+           placeholder="sk-ant-api03-..."
+           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <button class="btn-primary" onclick="saveKey()">Starten</button>
+  </div>
+
+  <a class="hint-link" href="https://console.anthropic.com/" target="_blank">
+    → Key holen auf console.anthropic.com
+  </a>
+</div>
+
+<!-- ── Loading Screen ─────────────────────────── -->
+<div id="loading-screen">
+  <div class="spinner-ring"></div>
+  <div class="loading-label">Analyse läuft</div>
+  <div class="loading-sub">KI wertet Märkte aus…</div>
+</div>
+
+<!-- ── Error Screen ───────────────────────────── -->
+<div id="error-screen">
+  <div class="err-icon">⚡</div>
+  <div class="err-title">Verbindungsfehler</div>
+  <div class="err-msg" id="error-msg">Unbekannter Fehler</div>
+  <button class="btn-retry" onclick="retryFetch()">Erneut versuchen</button>
+  <button style="background:none;border:none;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;margin-top:-8px;" onclick="resetKey()">API Key ändern</button>
+</div>
+
+<!-- ── Dashboard ──────────────────────────────── -->
+<div id="dashboard">
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="hdr-eyebrow">Tägliches Market Brief</div>
+      <div class="hdr-title">Markt<em>analyse</em></div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-date" id="hdr-date">—</div>
+      <div class="hdr-sentiment" id="hdr-sentiment">—</div>
+      <button class="refresh-btn" onclick="loadBrief()" id="refresh-btn">↺</button>
+    </div>
+  </div>
+
+  <!-- Alert -->
+  <div class="alert" id="alert-banner" style="display:none">
+    <span>⚠</span>
+    <span id="alert-text"></span>
+  </div>
+
+  <!-- Sentiment -->
+  <div class="card sent-bar-wrap" style="margin-bottom:14px">
+    <div class="sent-bar-labels">
+      <span>Gesamtstimmung</span>
+      <span id="score-label">Score: — / 100</span>
+    </div>
+    <div class="sent-bar-track">
+      <div class="sent-bar-fill" id="sent-fill" style="width:0%"></div>
+    </div>
+    <div class="sent-bar-ends">
+      <span>BEARISH</span><span>NEUTRAL</span><span>BULLISH</span>
+    </div>
+  </div>
+
+  <!-- US Märkte -->
+  <div class="card">
+    <div class="card-title">🇺🇸 US-Märkte</div>
+    <div id="us-markets"></div>
+  </div>
+
+  <!-- EU / Rohstoffe -->
+  <div class="card">
+    <div class="card-title">🌍 Europa & Rohstoffe</div>
+    <div id="eu-markets"></div>
+  </div>
+
+  <!-- Krypto -->
+  <div class="card">
+    <div class="card-title">₿ Kryptomärkte</div>
+    <div class="crypto-grid" id="crypto-grid"></div>
+  </div>
+
+  <!-- Einzelwerte -->
+  <div class="card">
+    <div class="card-title">📊 Einzelwerte</div>
+    <div class="stocks-grid" id="stocks-grid"></div>
+  </div>
+
+  <!-- Makro -->
+  <div class="card">
+    <div class="card-title">🌐 Makro-Faktoren</div>
+    <ul class="macro-list" id="macro-list"></ul>
+  </div>
+
+  <!-- Themen -->
+  <div class="card">
+    <div class="card-title">🔥 Top-Themen</div>
+    <div class="tag-cloud" id="topics-cloud"></div>
+  </div>
+
+  <!-- Risiken & Chancen -->
+  <div class="card">
+    <div class="card-title">⚖ Risiken & Chancen</div>
+    <div class="ro-label neg">Risiken</div>
+    <div class="tag-cloud" id="risks-cloud"></div>
+    <div class="ro-label pos">Chancen</div>
+    <div class="tag-cloud" id="opps-cloud"></div>
+  </div>
+
+  <!-- Empfehlung -->
+  <div class="rec-card">
+    <div class="rec-label">💡 Handlungsempfehlung</div>
+    <div class="rec-text" id="rec-text">—</div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-updated" id="footer-updated"></div>
+    <div class="footer-legal">KEIN ANLAGEBERATUNG · MARKET BRIEF</div>
+  </div>
+</div>
+
+<!-- PWA install prompt for Safari/iOS -->
+<div id="install-banner">
+  <div class="install-inner">
+    <div class="install-icon">📊</div>
+    <div class="install-text">
+      <strong>Als App installieren</strong>
+      <span>Teilen → "Zum Home-Bildschirm" tippen</span>
+    </div>
+    <button class="install-close" onclick="dismissInstall()">✕</button>
+  </div>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────
+const API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const KEY_STORAGE  = 'mb_api_key';
+const CACHE_KEY    = 'mb_cached_brief';
+const CACHE_TS_KEY = 'mb_cache_ts';
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// ── Screens ───────────────────────────────────────────
+const screens = {
+  key:      document.getElementById('key-screen'),
+  loading:  document.getElementById('loading-screen'),
+  error:    document.getElementById('error-screen'),
+  dash:     document.getElementById('dashboard'),
+};
+
+function show(name) {
+  Object.values(screens).forEach(s => s.style.display = 'none');
+  screens[name].style.display = 'flex';
+}
+
+// ── Init ──────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const key = localStorage.getItem(KEY_STORAGE);
+  if (!key) { show('key'); return; }
+  loadBrief();
+  maybeShowInstallBanner();
+});
+
+// ── Key handling ──────────────────────────────────────
+function saveKey() {
+  const v = document.getElementById('api-key-input').value.trim();
+  if (!v.startsWith('sk-ant')) {
+    alert('Bitte einen gültigen Anthropic API Key eingeben (beginnt mit sk-ant)');
+    return;
+  }
+  localStorage.setItem(KEY_STORAGE, v);
+  loadBrief();
+}
+
+function resetKey() {
+  localStorage.removeItem(KEY_STORAGE);
+  localStorage.removeItem(CACHE_KEY);
+  localStorage.removeItem(CACHE_TS_KEY);
+  show('key');
+}
+
+// ── Cache helpers ─────────────────────────────────────
+function getCached() {
+  try {
+    const ts = parseInt(localStorage.getItem(CACHE_TS_KEY) || '0');
+    if (Date.now() - ts > CACHE_TTL_MS) return null;
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function setCache(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
+  } catch {}
+}
+
+// ── Main fetch ────────────────────────────────────────
+async function loadBrief() {
+  // Disable refresh button
+  const btn = document.getElementById('refresh-btn');
+  if (btn) btn.disabled = true;
+
+  // Try cache first (skip on manual refresh = btn click)
+  const cached = getCached();
+  if (cached && btn && !btn._manualRefresh) {
+    renderBrief(cached);
+    if (btn) btn.disabled = false;
+    return;
+  }
+  if (btn) btn._manualRefresh = false;
+
+  show('loading');
+  const key = localStorage.getItem(KEY_STORAGE);
+  if (!key) { show('key'); return; }
+
+  const today = new Date().toLocaleDateString('de-DE', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const prompt = `Du bist ein erfahrener Finanzanalyst. Erstelle eine präzise Marktanalyse für heute, ${today}.
+
+Berücksichtige aktuelle globale Marktbedingungen, geopolitische Lage (insbesondere US-China-Beziehungen, aktuelle Konfliktherde), AI-Sektor-Entwicklungen, Kryptomarkt und makroökonomische Faktoren wie Inflation, Zinsen und Öl.
+
+Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks, kein Text davor oder danach. Exakt dieses Format:
+
+{
+  "date": "${today}",
+  "sentimentScore": 45,
+  "sentimentLabel": "neutral",
+  "alertMessage": "Kurze Alert-Headline max 90 Zeichen",
+  "usMarkets": [
+    {"name":"S&P 500","subtitle":"US-Leitindex","price":"5.800","change":"▲ +0,3%","isPositive":true},
+    {"name":"Nasdaq","subtitle":"Tech-Index","price":"18.900","change":"▲ +0,5%","isPositive":true},
+    {"name":"Dow Jones","subtitle":"30 Blue Chips","price":"43.000","change":"▼ −0,1%","isPositive":false},
+    {"name":"Russell 2000","subtitle":"Small Caps","price":"2.200","change":"▼ −0,4%","isPositive":false},
+    {"name":"VIX","subtitle":"Volatilität","price":"15,2","change":"▼ −2,1%","isPositive":true}
+  ],
+  "euMarkets": [
+    {"name":"DAX","subtitle":"Frankfurt","price":"20.000","change":"▲ +0,8%","isPositive":true},
+    {"name":"EURO STOXX 50","subtitle":"Europa","price":"5.200","change":"▲ +0,5%","isPositive":true},
+    {"name":"Öl Brent","subtitle":"Barrel USD","price":"$75","change":"▼ −0,5%","isPositive":false},
+    {"name":"Gold","subtitle":"Troy Oz","price":"$3.100","change":"▲ +0,2%","isPositive":true},
+    {"name":"EUR/USD","subtitle":"Devisen","price":"1,0950","change":"▲ +0,1%","isPositive":true}
+  ],
+  "crypto": [
+    {"symbol":"BTC/USD","price":"$95.000","change":"▲ +1,2%","isPositive":true,"note":"Dominanz 58%","barPercent":0.74},
+    {"symbol":"ETH/USD","price":"$3.400","change":"▲ +0,8%","isPositive":true,"note":"Staking-Flows","barPercent":0.52},
+    {"symbol":"SOL/USD","price":"$145","change":"▼ −0,3%","isPositive":false,"note":"Support $140","barPercent":0.45}
+  ],
+  "stocks": [
+    {"name":"Nvidia","change":"+2,1%","isPositive":true},
+    {"name":"Apple","change":"+0,4%","isPositive":true},
+    {"name":"Microsoft","change":"−0,2%","isPositive":false},
+    {"name":"Tesla","change":"+1,8%","isPositive":true},
+    {"name":"Amazon","change":"−0,6%","isPositive":false},
+    {"name":"DAX-Top","change":"+1,2%","isPositive":true}
+  ],
+  "macroFactors": [
+    {"key":"Brent Öl","value":"$75 ▼","isPositive":false,"isNeutral":true},
+    {"key":"Gold","value":"$3.100 ▲","isPositive":true,"isNeutral":false},
+    {"key":"EUR/USD","value":"1,0950","isPositive":true,"isNeutral":false},
+    {"key":"US 10Y Yield","value":"4,2%","isPositive":false,"isNeutral":true},
+    {"key":"Fed Erwartung","value":"2 Schnitte 2025","isPositive":true,"isNeutral":false},
+    {"key":"Geopolitik","value":"Stabil","isPositive":true,"isNeutral":false}
+  ],
+  "topTopics": [
+    {"text":"AI-Infrastruktur","sentiment":"positive"},
+    {"text":"Fed Pause","sentiment":"neutral"},
+    {"text":"China PMI","sentiment":"negative"},
+    {"text":"Öl Rückgang","sentiment":"neutral"},
+    {"text":"Nvidia Earnings","sentiment":"positive"},
+    {"text":"Dollar schwächer","sentiment":"positive"}
+  ],
+  "risks": ["Inflation hartnäckig","Geopolitik","Rezessionsangst","KI-Bewertungen hoch"],
+  "opportunities": ["AI-Strukturwachstum","Fed-Pivot","DAX stabil","Krypto ETF-Inflows"],
+  "recommendation": "3-5 Sätze auf Deutsch. Präzise, actionable. Verwende **Fettschrift** für Schlüsselbegriffe."
+}
+
+Passe ALLE Zahlen und Einschätzungen an die tatsächliche Marktlage von heute an. Sei präzise und aktuell.`;
+
+  try {
+    const res = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      const msg = errBody?.error?.message || `HTTP ${res.status}`;
+      if (res.status === 401) throw new Error('Ungültiger API Key. Bitte Key prüfen.');
+      throw new Error(msg);
+    }
+
+    const data = await res.json();
+    const textBlock = data.content?.find(b => b.type === 'text');
+    if (!textBlock?.text) throw new Error('Keine Textantwort von Claude erhalten.');
+
+    // Clean and parse JSON
+    let cleaned = textBlock.text
+      .replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    // Find first { to last }
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('Kein JSON in Antwort gefunden.');
+    cleaned = cleaned.slice(start, end + 1);
+
+    const brief = JSON.parse(cleaned);
+    // Convert **bold** to <strong>
+    if (brief.recommendation) {
+      brief.recommendation = brief.recommendation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    }
+    setCache(brief);
+    renderBrief(brief);
+
+  } catch (err) {
+    console.error(err);
+    // Show full error details for debugging
+    const errDetail = [
+      err.message || String(err),
+      err.name ? 'Type: ' + err.name : '',
+      err.cause ? 'Cause: ' + String(err.cause) : '',
+      'URL: ' + window.location.href.substring(0, 40),
+    ].filter(Boolean).join('\n\n');
+    document.getElementById('error-msg').textContent = errDetail;
+    show('error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function retryFetch() {
+  const btn = document.getElementById('refresh-btn');
+  if (btn) btn._manualRefresh = true;
+  loadBrief();
+}
+
+// ── Render ────────────────────────────────────────────
+function renderBrief(b) {
+  // Header
+  document.getElementById('hdr-date').textContent =
+    (b.date || '').toUpperCase();
+
+  const sentColors = { bullish: '#4ecba0', neutral: '#e8c547', cautious: '#e8a047', bearish: '#e05757' };
+  const sentLabels = { bullish: '🟢 BULLISH', neutral: '🟡 NEUTRAL', cautious: '🟠 VORSICHT', bearish: '🔴 BEARISH' };
+  const sl = (b.sentimentLabel || 'neutral').toLowerCase();
+  const sentEl = document.getElementById('hdr-sentiment');
+  sentEl.textContent = sentLabels[sl] || b.sentimentLabel;
+  sentEl.style.color = sentColors[sl] || '#e8c547';
+
+  // Score bar
+  const score = Math.min(100, Math.max(0, b.sentimentScore || 50));
+  document.getElementById('score-label').textContent = `Score: ${score} / 100`;
+  setTimeout(() => {
+    document.getElementById('sent-fill').style.width = score + '%';
+  }, 200);
+
+  // Alert
+  const alertBanner = document.getElementById('alert-banner');
+  if (b.alertMessage) {
+    document.getElementById('alert-text').textContent = b.alertMessage;
+    alertBanner.style.display = 'flex';
+  } else {
+    alertBanner.style.display = 'none';
+  }
+
+  // Index rows helper
+  function buildIndexRows(items) {
+    return (items || []).map(idx => `
+      <div class="idx-row">
+        <div>
+          <div class="idx-name">${esc(idx.name)}</div>
+          <div class="idx-sub">${esc(idx.subtitle)}</div>
+        </div>
+        <div class="idx-right">
+          <div class="idx-price">${esc(idx.price)}</div>
+          <div class="idx-chg ${idx.isPositive ? 'pos' : 'neg'}">${esc(idx.change)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  document.getElementById('us-markets').innerHTML = buildIndexRows(b.usMarkets);
+  document.getElementById('eu-markets').innerHTML = buildIndexRows(b.euMarkets);
+
+  // Crypto
+  document.getElementById('crypto-grid').innerHTML = (b.crypto || []).map(c => `
+    <div class="crypto-cell">
+      <div class="crypto-sym">${esc(c.symbol)}</div>
+      <div class="crypto-price">${esc(c.price)}</div>
+      <div class="crypto-chg ${c.isPositive ? 'pos' : 'neg'}">${esc(c.change)}</div>
+      <div class="mini-bar"><div class="mini-fill" style="width:${(c.barPercent||0)*100}%; background:${c.isPositive ? 'var(--green)' : 'var(--gold)'}"></div></div>
+      <div class="crypto-note">${esc(c.note)}</div>
+    </div>`).join('');
+
+  // Stocks
+  document.getElementById('stocks-grid').innerHTML = (b.stocks || []).map(s => `
+    <div class="stock-cell">
+      <span class="stock-name">${esc(s.name)}</span>
+      <span class="stock-chg ${s.isPositive ? 'pos' : 'neg'}">${esc(s.change)}</span>
+    </div>`).join('');
+
+  // Macro
+  document.getElementById('macro-list').innerHTML = (b.macroFactors || []).map(m => `
+    <li class="macro-item">
+      <span class="macro-key">${esc(m.key)}</span>
+      <span class="macro-val ${m.isNeutral ? 'neu' : m.isPositive ? 'pos' : 'neg'}">${esc(m.value)}</span>
+    </li>`).join('');
+
+  // Topics
+  const topicCls = { positive: 'tag-pos', negative: 'tag-neg', neutral: 'tag-neu' };
+  document.getElementById('topics-cloud').innerHTML = (b.topTopics || []).map(t =>
+    `<span class="tag ${topicCls[t.sentiment] || 'tag-neu'}">${esc(t.text)}</span>`).join('');
+
+  // Risks / Opps
+  document.getElementById('risks-cloud').innerHTML = (b.risks || []).map(r =>
+    `<span class="tag tag-neg">${esc(r)}</span>`).join('');
+  document.getElementById('opps-cloud').innerHTML = (b.opportunities || []).map(o =>
+    `<span class="tag tag-pos">${esc(o)}</span>`).join('');
+
+  // Recommendation (already has <strong> tags)
+  document.getElementById('rec-text').innerHTML = b.recommendation || '—';
+
+  // Footer
+  document.getElementById('footer-updated').textContent =
+    'Aktualisiert: ' + new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+
+  // Trigger refresh btn manual flag reset
+  const btn = document.getElementById('refresh-btn');
+  if (btn) {
+    btn._manualRefresh = false;
+    btn.onclick = () => { btn._manualRefresh = true; loadBrief(); };
+  }
+
+  show('dash');
+  window.scrollTo(0, 0);
+}
+
+// ── Manual refresh wiring ──────────────────────────────
+// (also set in renderBrief, but set here for safety on first render)
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('refresh-btn');
+  if (btn) btn.onclick = () => { btn._manualRefresh = true; loadBrief(); };
+});
+
+// ── Install banner (iOS Safari only) ─────────────────
+function maybeShowInstallBanner() {
+  const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone;
+  const dismissed = localStorage.getItem('mb_install_dismissed');
+  if (isIOS && isSafari && !isStandalone && !dismissed) {
+    setTimeout(() => {
+      document.getElementById('install-banner').style.display = 'block';
+    }, 3000);
+  }
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner').style.display = 'none';
+  localStorage.setItem('mb_install_dismissed', '1');
+}
+
+// ── Helpers ───────────────────────────────────────────
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
