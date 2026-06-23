@@ -394,7 +394,7 @@ body::after {
 .card:nth-child(5){animation-delay:0.25s} .card:nth-child(6){animation-delay:0.30s}
 .card:nth-child(7){animation-delay:0.35s} .card:nth-child(8){animation-delay:0.40s}
 .rec-box{animation-delay:0.45s} .alert{animation-delay:0.02s}
-</style>
+
 </head>
 <body>
 
@@ -406,9 +406,15 @@ body::after {
     <div class="key-lbl">Anthropic API Key</div>
     <input type="password" id="api-key-input" placeholder="sk-ant-api03-…"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div class="key-form">
+    <div class="key-lbl">Finnhub API Key (für echte Kurse)</div>
+    <input type="password" id="finnhub-key-input" placeholder="z.B. cXXXXXXXXXXXXXXXX"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button class="btn-primary" onclick="saveKey()">Starten →</button>
   </div>
-  <a class="hint-link" href="https://console.anthropic.com/" target="_blank">Key holen → console.anthropic.com</a>
+  <a class="hint-link" href="https://console.anthropic.com/" target="_blank">Anthropic Key → console.anthropic.com</a>
+  <a class="hint-link" href="https://finnhub.io/register" target="_blank">Finnhub Key (gratis) → finnhub.io/register</a>
 </div>
 
 <!-- LOADING SCREEN -->
@@ -528,6 +534,44 @@ body::after {
       </div>
     </div>
 
+    <!-- ═══ PORTFOLIO ═══ -->
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      <span>ⓘ</span>
+      <span>SIMULATION / PAPER-TRADING — Dies ist ein fiktives Musterportfolio zu Demonstrationszwecken. Keine Anlageberatung. Echtes Investieren erfolgt auf eigenes Risiko.</span>
+    </div>
+
+    <!-- Portfolio value hero -->
+    <div class="pf-hero">
+      <div class="pf-hero-label">Musterportfolio · 10.000 € Start</div>
+      <div class="pf-value" id="pf-value">—</div>
+      <div class="pf-delta" id="pf-delta"></div>
+      <div class="alloc-bar" id="pf-alloc" style="margin-top:14px"></div>
+      <div class="pf-sub">
+        <span id="pf-since">—</span>
+        <span id="pf-cash">—</span>
+      </div>
+    </div>
+
+    <!-- Holdings -->
+    <div class="card">
+      <div class="card-title">💼 Positionen <span class="src-badge" id="price-source" style="margin-left:auto">● LIVE</span></div>
+      <div class="card-body" id="holdings-list"></div>
+    </div>
+
+    <!-- Trade suggestions -->
+    <div class="card">
+      <div class="card-title">🔄 Kauf- / Verkaufsvorschläge</div>
+      <div class="card-body" id="trades-list" style="padding-top:8px"></div>
+      <div style="padding:0 16px 16px">
+        <div class="pf-actions">
+          <button class="pf-btn pf-btn-apply" onclick="applyTrades()">Vorschläge anwenden</button>
+          <button class="pf-btn pf-btn-reset" onclick="resetPortfolio()">Zurücksetzen</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Recommendation -->
     <div class="rec-box">
       <div class="rec-title">💡 Handlungsempfehlung</div>
@@ -556,13 +600,27 @@ body::after {
   </div>
 </div>
 
+
 <script>
 // ── Constants ─────────────────────────────────────────
-const API_ENDPOINT = 'https://marketbriefproxy.loysl61.workers.dev/'; // z.B. https://marketbrief.DEINNAME.workers.dev
+const API_ENDPOINT = 'https://marketbriefproxy.loysl61.workers.dev/';
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KEY_STORAGE  = 'mb_api_key';
+const FINNHUB_KEY_STORAGE = 'mb_finnhub_key';
 const CACHE_KEY    = 'mb_cached_brief';
 const CACHE_TS_KEY = 'mb_cache_ts';
+const PORTFOLIO_KEY = 'mb_portfolio';
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// Portfolio universe — real tradeable symbols via Finnhub
+// stocks/ETFs use plain symbols; crypto uses BINANCE: prefix
+const UNIVERSE = [
+  { sym: 'NVDA',  finnhub: 'NVDA',                name: 'NVIDIA',         cls: 'Aktie · AI',     badge: 'NVDA' },
+  { sym: 'MSFT',  finnhub: 'MSFT',                name: 'Microsoft',      cls: 'Aktie · Tech',   badge: 'MSFT' },
+  { sym: 'VOO',   finnhub: 'VOO',                 name: 'S&P 500 ETF',    cls: 'ETF · Breit',    badge: 'VOO' },
+  { sym: 'BTC',   finnhub: 'BINANCE:BTCUSDT',     name: 'Bitcoin',        cls: 'Krypto',         badge: 'BTC' },
+  { sym: 'ETH',   finnhub: 'BINANCE:ETHUSDT',     name: 'Ethereum',       cls: 'Krypto',         badge: 'ETH' },
+];
 
 // ── Screens ───────────────────────────────────────────
 const screens = {
@@ -571,15 +629,15 @@ const screens = {
   error:    document.getElementById('error-screen'),
   dash:     document.getElementById('dashboard'),
 };
-
 function show(name) {
   Object.values(screens).forEach(s => s.style.display = 'none');
-  if (name === 'dash') {
-    screens[name].style.display = 'block';
-  } else {
-    screens[name].style.display = 'flex';
-  }
+  screens[name].style.display = (name === 'dash') ? 'block' : 'flex';
 }
+
+// ── State (filled each load) ──────────────────────────
+let currentPrices = {};   // sym -> {price, changePct, prevClose}
+let currentEURUSD = 1.08; // fallback
+let pendingTrades = [];   // trade suggestions for this session
 
 // ── Init ──────────────────────────────────────────────
 window.addEventListener('load', () => {
@@ -597,9 +655,10 @@ function saveKey() {
     return;
   }
   localStorage.setItem(KEY_STORAGE, v);
+  const fh = document.getElementById('finnhub-key-input').value.trim();
+  if (fh) localStorage.setItem(FINNHUB_KEY_STORAGE, fh);
   loadBrief();
 }
-
 function resetKey() {
   localStorage.removeItem(KEY_STORAGE);
   localStorage.removeItem(CACHE_KEY);
@@ -616,7 +675,6 @@ function getCached() {
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
-
 function setCache(data) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
@@ -624,29 +682,269 @@ function setCache(data) {
   } catch {}
 }
 
-// ── Main fetch ────────────────────────────────────────
+// ── FINNHUB: fetch real quotes ────────────────────────
+async function fetchQuote(finnhubSym, fhKey) {
+  const url = `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(finnhubSym)}&token=${fhKey}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Finnhub ${r.status} für ${finnhubSym}`);
+  const d = await r.json();
+  // d.c = current, d.pc = previous close, d.dp = change percent
+  return { price: d.c || 0, prevClose: d.pc || 0, changePct: d.dp || 0 };
+}
+
+async function fetchAllPrices(fhKey) {
+  const prices = {};
+  // Sequential to respect rate limits (5 symbols, well under 60/min)
+  for (const u of UNIVERSE) {
+    try {
+      const q = await fetchQuote(u.finnhub, fhKey);
+      prices[u.sym] = q;
+    } catch (e) {
+      prices[u.sym] = null; // mark failed
+    }
+  }
+  // EUR/USD for currency conversion
+  try {
+    const fx = await fetchQuote('OANDA:EUR_USD', fhKey);
+    if (fx.price > 0) currentEURUSD = fx.price;
+  } catch {}
+  return prices;
+}
+
+// ── PORTFOLIO: storage ────────────────────────────────
+function getPortfolio() {
+  try {
+    const raw = localStorage.getItem(PORTFOLIO_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function savePortfolio(pf) {
+  try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(pf)); } catch {}
+}
+
+// Build the INITIAL portfolio (first run) — equal-ish growth allocation
+// All values stored in EUR. Holdings stored as units (shares/coins).
+function createInitialPortfolio() {
+  // Growth-oriented target allocation (sums to 1.0)
+  const targetAlloc = {
+    'NVDA': 0.25,
+    'MSFT': 0.20,
+    'VOO':  0.25,
+    'BTC':  0.20,
+    'ETH':  0.10,
+  };
+  const startCapitalEUR = 10000;
+  const holdings = {};
+  // Convert each EUR slice into units using current USD price -> EUR
+  for (const u of UNIVERSE) {
+    const q = currentPrices[u.sym];
+    const allocEUR = startCapitalEUR * (targetAlloc[u.sym] || 0);
+    if (q && q.price > 0) {
+      const priceEUR = q.price / currentEURUSD;
+      holdings[u.sym] = {
+        units: allocEUR / priceEUR,
+        avgCostEUR: priceEUR,        // cost basis per unit
+        targetAlloc: targetAlloc[u.sym]
+      };
+    } else {
+      holdings[u.sym] = { units: 0, avgCostEUR: 0, targetAlloc: targetAlloc[u.sym] };
+    }
+  }
+  const pf = {
+    createdAt: Date.now(),
+    lastEvaluated: Date.now(),
+    startCapitalEUR,
+    cashEUR: 0,
+    holdings,
+    history: [{ ts: Date.now(), valueEUR: startCapitalEUR }]
+  };
+  return pf;
+}
+
+// Compute current portfolio value in EUR
+function computePortfolioValue(pf) {
+  let total = pf.cashEUR || 0;
+  const positions = [];
+  for (const u of UNIVERSE) {
+    const h = pf.holdings[u.sym];
+    if (!h || h.units <= 0) continue;
+    const q = currentPrices[u.sym];
+    const priceEUR = (q && q.price > 0) ? q.price / currentEURUSD : h.avgCostEUR;
+    const valueEUR = h.units * priceEUR;
+    const costEUR = h.units * h.avgCostEUR;
+    const plEUR = valueEUR - costEUR;
+    const plPct = costEUR > 0 ? (plEUR / costEUR) * 100 : 0;
+    total += valueEUR;
+    positions.push({
+      ...u, units: h.units, priceEUR, valueEUR, costEUR, plEUR, plPct,
+      changePct: q ? q.changePct : 0,
+      targetAlloc: h.targetAlloc
+    });
+  }
+  return { total, positions };
+}
+
+// Generate buy/sell suggestions by comparing current allocation vs target
+function generateTrades(pf, valuation) {
+  const trades = [];
+  const total = valuation.total;
+  if (total <= 0) return trades;
+
+  for (const p of valuation.positions) {
+    const currentWeight = p.valueEUR / total;
+    const targetWeight = p.targetAlloc || 0;
+    const driftPct = (currentWeight - targetWeight) * 100;
+    const driftEUR = (currentWeight - targetWeight) * total;
+
+    // Rebalancing threshold: 3 percentage points
+    if (driftPct > 3) {
+      trades.push({
+        sym: p.sym, name: p.name, action: 'SELL',
+        amountEUR: Math.abs(driftEUR),
+        reason: `Übergewichtet (${(currentWeight*100).toFixed(0)}% statt ${(targetWeight*100).toFixed(0)}%). Teilverkauf zur Rückführung auf Zielallokation. Tagesänderung: ${p.changePct>=0?'+':''}${p.changePct.toFixed(1)}%.`
+      });
+    } else if (driftPct < -3) {
+      trades.push({
+        sym: p.sym, name: p.name, action: 'BUY',
+        amountEUR: Math.abs(driftEUR),
+        reason: `Untergewichtet (${(currentWeight*100).toFixed(0)}% statt ${(targetWeight*100).toFixed(0)}%). Nachkauf empfohlen. Tagesänderung: ${p.changePct>=0?'+':''}${p.changePct.toFixed(1)}%.`
+      });
+    } else {
+      trades.push({
+        sym: p.sym, name: p.name, action: 'HOLD',
+        amountEUR: 0,
+        reason: `Im Zielkorridor (${(currentWeight*100).toFixed(0)}%). Halten.`
+      });
+    }
+  }
+  // Sort: BUY/SELL first, HOLD last
+  trades.sort((a,b) => {
+    const order = { SELL: 0, BUY: 1, HOLD: 2 };
+    return order[a.action] - order[b.action];
+  });
+  return trades;
+}
+
+// Apply trades: rebalance holdings to target allocation
+function applyTrades() {
+  const pf = getPortfolio();
+  if (!pf) return;
+  const valuation = computePortfolioValue(pf);
+  const total = valuation.total;
+  // Rebalance every holding to its target allocation at current prices
+  for (const u of UNIVERSE) {
+    const h = pf.holdings[u.sym];
+    if (!h) continue;
+    const q = currentPrices[u.sym];
+    const priceEUR = (q && q.price > 0) ? q.price / currentEURUSD : h.avgCostEUR;
+    if (priceEUR <= 0) continue;
+    const targetValueEUR = total * (h.targetAlloc || 0);
+    const newUnits = targetValueEUR / priceEUR;
+    // Weighted-average cost basis update for added units; keep basis for reduced
+    if (newUnits > h.units) {
+      const addedUnits = newUnits - h.units;
+      const totalCost = h.units * h.avgCostEUR + addedUnits * priceEUR;
+      h.avgCostEUR = totalCost / newUnits;
+    }
+    h.units = newUnits;
+  }
+  pf.cashEUR = 0;
+  pf.lastEvaluated = Date.now();
+  pf.history.push({ ts: Date.now(), valueEUR: total });
+  if (pf.history.length > 60) pf.history = pf.history.slice(-60);
+  savePortfolio(pf);
+  // Re-render
+  renderPortfolio(pf);
+  // brief visual feedback
+  const btn = document.querySelector('.pf-btn-apply');
+  if (btn) { const t = btn.textContent; btn.textContent = '✓ Gespeichert'; setTimeout(()=>btn.textContent=t, 1500); }
+}
+
+function resetPortfolio() {
+  if (!confirm('Musterportfolio auf 10.000 € zurücksetzen? Der gespeicherte Verlauf geht verloren.')) return;
+  const pf = createInitialPortfolio();
+  savePortfolio(pf);
+  renderPortfolio(pf);
+}
+
+// ── Main load ─────────────────────────────────────────
 async function loadBrief() {
-  // Disable refresh button
   const btn = document.getElementById('refresh-btn');
   if (btn) btn.disabled = true;
-
-  // Try cache first (skip on manual refresh = btn click)
-  const cached = getCached();
-  if (cached && btn && !btn._manualRefresh) {
-    renderBrief(cached);
-    if (btn) btn.disabled = false;
-    return;
-  }
-  if (btn) btn._manualRefresh = false;
 
   show('loading');
   const key = localStorage.getItem(KEY_STORAGE);
   if (!key) { show('key'); return; }
+  const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
 
-  const today = new Date().toLocaleDateString('de-DE', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  try {
+    // 1) Fetch REAL prices from Finnhub (if key present)
+    let priceSourceLive = false;
+    if (fhKey) {
+      try {
+        currentPrices = await fetchAllPrices(fhKey);
+        priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0);
+      } catch (e) {
+        priceSourceLive = false;
+      }
+    }
+
+    // 2) Fetch qualitative brief from Claude (cached 4h unless manual)
+    let brief = (btn && btn._manualRefresh) ? null : getCached();
+    if (!brief) {
+      brief = await fetchBriefFromClaude(key);
+      setCache(brief);
+    }
+    if (btn) btn._manualRefresh = false;
+
+    // 3) Portfolio: create on first run, else load
+    let pf = getPortfolio();
+    if (!pf) {
+      if (!priceSourceLive) {
+        // Can't create portfolio without prices — use brief crypto/stock as fallback prices
+        seedFallbackPrices(brief);
+      }
+      pf = createInitialPortfolio();
+      savePortfolio(pf);
+    }
+
+    // 4) Render everything
+    renderBrief(brief, priceSourceLive);
+    renderPortfolio(pf, priceSourceLive);
+
+    show('dash');
+    window.scrollTo(0, 0);
+
+  } catch (err) {
+    const detail = [
+      err.message || String(err),
+      err.name ? 'Type: ' + err.name : '',
+      'URL: ' + window.location.href.substring(0, 50)
+    ].filter(Boolean).join('\n\n');
+    document.getElementById('error-msg').textContent = detail;
+    show('error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Fallback: if Finnhub unavailable, parse rough prices from Claude brief
+function seedFallbackPrices(brief) {
+  currentPrices = {};
+  const parseNum = s => parseFloat(String(s).replace(/[^0-9.,]/g,'').replace('.','').replace(',','.')) || 0;
+  // crypto from brief
+  (brief.crypto||[]).forEach(c => {
+    if (c.symbol.startsWith('BTC')) currentPrices['BTC'] = { price: parseNum(c.price), changePct: 0, prevClose: 0 };
+    if (c.symbol.startsWith('ETH')) currentPrices['ETH'] = { price: parseNum(c.price), changePct: 0, prevClose: 0 };
   });
+  // rough stock fallbacks (USD)
+  currentPrices['NVDA'] = currentPrices['NVDA'] || { price: 140, changePct: 0, prevClose: 140 };
+  currentPrices['MSFT'] = currentPrices['MSFT'] || { price: 430, changePct: 0, prevClose: 430 };
+  currentPrices['VOO']  = currentPrices['VOO']  || { price: 540, changePct: 0, prevClose: 540 };
+}
 
+async function fetchBriefFromClaude(key) {
+  const today = new Date().toLocaleDateString('de-DE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   const prompt = `Du bist ein erfahrener Finanzanalyst. Erstelle eine präzise Marktanalyse für heute, ${today}.
 
 Berücksichtige aktuelle globale Marktbedingungen, geopolitische Lage (insbesondere US-China-Beziehungen, aktuelle Konfliktherde), AI-Sektor-Entwicklungen, Kryptomarkt und makroökonomische Faktoren wie Inflation, Zinsen und Öl.
@@ -708,63 +1006,26 @@ Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks, k
 
 Passe ALLE Zahlen und Einschätzungen an die tatsächliche Marktlage von heute an. Sei präzise und aktuell.`;
 
-  try {
-    const res = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      const msg = errBody?.error?.message || `HTTP ${res.status}`;
-      if (res.status === 401) throw new Error('Ungültiger API Key. Bitte Key prüfen.');
-      throw new Error(msg);
-    }
-
-    const data = await res.json();
-    const textBlock = data.content?.find(b => b.type === 'text');
-    if (!textBlock?.text) throw new Error('Keine Textantwort von Claude erhalten.');
-
-    // Clean and parse JSON
-    let cleaned = textBlock.text
-      .replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    // Find first { to last }
-    const start = cleaned.indexOf('{');
-    const end = cleaned.lastIndexOf('}');
-    if (start === -1 || end === -1) throw new Error('Kein JSON in Antwort gefunden.');
-    cleaned = cleaned.slice(start, end + 1);
-
-    const brief = JSON.parse(cleaned);
-    // Convert **bold** to <strong>
-    if (brief.recommendation) {
-      brief.recommendation = brief.recommendation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    }
-    setCache(brief);
-    renderBrief(brief);
-
-  } catch (err) {
-    console.error(err);
-    // Show full error details for debugging
-    const errDetail = [
-      err.message || String(err),
-      err.name ? 'Type: ' + err.name : '',
-      err.cause ? 'Cause: ' + String(err.cause) : '',
-      'URL: ' + window.location.href.substring(0, 40),
-    ].filter(Boolean).join('\n\n');
-    document.getElementById('error-msg').textContent = errDetail;
-    show('error');
-  } finally {
-    if (btn) btn.disabled = false;
+  const res = await fetch(API_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(()=>({}));
+    if (res.status === 401) throw new Error('Ungültiger API Key. Bitte Key prüfen.');
+    throw new Error(e?.error?.message || `HTTP ${res.status}`);
   }
+  const data = await res.json();
+  const tb = data.content?.find(b => b.type === 'text');
+  if (!tb?.text) throw new Error('Keine Textantwort von Claude erhalten.');
+  let c = tb.text.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+  const s = c.indexOf('{'), e2 = c.lastIndexOf('}');
+  if (s === -1 || e2 === -1) throw new Error('Kein JSON in Antwort gefunden.');
+  c = c.slice(s, e2+1);
+  const brief = JSON.parse(c);
+  if (brief.recommendation) brief.recommendation = brief.recommendation.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  return brief;
 }
 
 function retryFetch() {
@@ -773,36 +1034,24 @@ function retryFetch() {
   loadBrief();
 }
 
-// ── Render ────────────────────────────────────────────
-function renderBrief(b) {
-  // Header
-  document.getElementById('hdr-date').textContent =
-    (b.date || '').toUpperCase();
-
-  const sentColors = { bullish: '#4ecba0', neutral: '#e8c547', cautious: '#e8a047', bearish: '#e05757' };
-  const sentLabels = { bullish: '🟢 BULLISH', neutral: '🟡 NEUTRAL', cautious: '🟠 VORSICHT', bearish: '🔴 BEARISH' };
+// ── Render: market brief ──────────────────────────────
+function renderBrief(b, priceSourceLive) {
+  document.getElementById('hdr-date').textContent = (b.date || '').toUpperCase();
+  const sentColors = { bullish:'#4ecba0', neutral:'#e8c547', cautious:'#e8a047', bearish:'#e05757' };
+  const sentLabels = { bullish:'🟢 BULLISH', neutral:'🟡 NEUTRAL', cautious:'🟠 VORSICHT', bearish:'🔴 BEARISH' };
   const sl = (b.sentimentLabel || 'neutral').toLowerCase();
   const sentEl = document.getElementById('hdr-sentiment');
   sentEl.textContent = sentLabels[sl] || b.sentimentLabel;
   sentEl.style.color = sentColors[sl] || '#e8c547';
 
-  // Score bar
   const score = Math.min(100, Math.max(0, b.sentimentScore || 50));
   document.getElementById('score-label').textContent = `Score ${score}/100`;
-  setTimeout(() => {
-    document.getElementById('sent-fill').style.width = score + '%';
-  }, 200);
+  setTimeout(() => { document.getElementById('sent-fill').style.width = score + '%'; }, 200);
 
-  // Alert
   const alertBanner = document.getElementById('alert-banner');
-  if (b.alertMessage) {
-    document.getElementById('alert-text').textContent = b.alertMessage;
-    alertBanner.style.display = 'flex';
-  } else {
-    alertBanner.style.display = 'none';
-  }
+  if (b.alertMessage) { document.getElementById('alert-text').textContent = b.alertMessage; alertBanner.style.display = 'flex'; }
+  else alertBanner.style.display = 'none';
 
-  // Index rows helper
   function buildIndexRows(items) {
     return (items || []).map(idx => `
       <div class="idx-row">
@@ -816,13 +1065,9 @@ function renderBrief(b) {
         </div>
       </div>`).join('');
   }
-  // wrap in table container
-  const wrapIdx = html => '<div style="display:flex;flex-direction:column">' + html + '</div>';
-
   document.getElementById('us-markets').innerHTML = buildIndexRows(b.usMarkets);
   document.getElementById('eu-markets').innerHTML = buildIndexRows(b.euMarkets);
 
-  // Crypto — list row layout
   const cryptoAbbr = {'BTC/USD':'BTC','ETH/USD':'ETH','SOL/USD':'SOL'};
   document.getElementById('crypto-grid').innerHTML = (b.crypto || []).map(c => `
     <div class="crypto-cell">
@@ -838,71 +1083,113 @@ function renderBrief(b) {
       </div>
     </div>`).join('');
 
-  // Stocks
   document.getElementById('stocks-grid').innerHTML = (b.stocks || []).map(s => `
     <div class="stock-cell">
       <div class="stock-name">${esc(s.name)}</div>
       <div class="stock-chg ${s.isPositive ? 'pos' : 'neg'}">${esc(s.change)}</div>
     </div>`).join('');
 
-  // Macro
   document.getElementById('macro-list').innerHTML = (b.macroFactors || []).map(m => `
     <li class="macro-item">
       <span class="macro-key">${esc(m.key)}</span>
       <span class="macro-val ${m.isNeutral ? 'neu' : m.isPositive ? 'pos' : 'neg'}">${esc(m.value)}</span>
     </li>`).join('');
 
-  // Topics
-  const topicCls = { positive: 'tag-pos', negative: 'tag-neg', neutral: 'tag-neu' };
+  const topicCls = { positive:'tag-pos', negative:'tag-neg', neutral:'tag-neu' };
   document.getElementById('topics-cloud').innerHTML = (b.topTopics || []).map(t =>
     `<span class="tag ${topicCls[t.sentiment] || 'tag-neu'}">${esc(t.text)}</span>`).join('');
-
-  // Risks / Opps
-  document.getElementById('risks-cloud').innerHTML = (b.risks || []).map(r =>
-    `<span class="tag tag-neg">${esc(r)}</span>`).join('');
-  document.getElementById('opps-cloud').innerHTML = (b.opportunities || []).map(o =>
-    `<span class="tag tag-pos">${esc(o)}</span>`).join('');
-
-  // Recommendation (already has <strong> tags)
+  document.getElementById('risks-cloud').innerHTML = (b.risks || []).map(r => `<span class="tag tag-neg">${esc(r)}</span>`).join('');
+  document.getElementById('opps-cloud').innerHTML = (b.opportunities || []).map(o => `<span class="tag tag-pos">${esc(o)}</span>`).join('');
   document.getElementById('rec-text').innerHTML = b.recommendation || '—';
+  document.getElementById('footer-updated').textContent = 'Aktualisiert: ' + new Date().toLocaleString('de-DE', { dateStyle:'short', timeStyle:'short' });
 
-  // Footer
-  document.getElementById('footer-updated').textContent =
-    'Aktualisiert: ' + new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
-
-  // Trigger refresh btn manual flag reset
   const btn = document.getElementById('refresh-btn');
-  if (btn) {
-    btn._manualRefresh = false;
-    btn.onclick = () => { btn._manualRefresh = true; loadBrief(); };
-  }
-
-  show('dash');
-  document.getElementById('dashboard').style.display = 'block';
-  window.scrollTo(0, 0);
+  if (btn) { btn._manualRefresh = false; btn.onclick = () => { btn._manualRefresh = true; loadBrief(); }; }
 }
 
-// ── Manual refresh wiring ──────────────────────────────
-// (also set in renderBrief, but set here for safety on first render)
+// ── Render: portfolio ─────────────────────────────────
+const fmtEUR = v => v.toLocaleString('de-DE', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
+const fmtEUR2 = v => v.toLocaleString('de-DE', { style:'currency', currency:'EUR', maximumFractionDigits:2 });
+
+function renderPortfolio(pf, priceSourceLive) {
+  const val = computePortfolioValue(pf);
+  const total = val.total;
+  const startCap = pf.startCapitalEUR || 10000;
+  const totalPL = total - startCap;
+  const totalPLPct = (totalPL / startCap) * 100;
+
+  // Hero
+  document.getElementById('pf-value').textContent = fmtEUR2(total);
+  const deltaEl = document.getElementById('pf-delta');
+  const sign = totalPL >= 0 ? '+' : '';
+  deltaEl.innerHTML = `
+    <span class="pf-delta-abs ${totalPL>=0?'pos':'neg'}">${sign}${fmtEUR2(totalPL)}</span>
+    <span class="${totalPL>=0?'pos':'neg'}">${sign}${totalPLPct.toFixed(2)}% seit Start</span>`;
+
+  // Allocation bar
+  const allocColors = { NVDA:'#76b900', MSFT:'#5b9cf6', VOO:'#c9a96e', BTC:'#f7931a', ETH:'#7b8cf0' };
+  document.getElementById('pf-alloc').innerHTML = val.positions.map(p => {
+    const w = total>0 ? (p.valueEUR/total*100) : 0;
+    return `<div class="alloc-seg" style="width:${w}%;background:${allocColors[p.sym]||'var(--gold)'}"></div>`;
+  }).join('');
+
+  // Since / source
+  const created = new Date(pf.createdAt).toLocaleDateString('de-DE', { day:'2-digit', month:'short', year:'numeric' });
+  document.getElementById('pf-since').textContent = `Start: ${created}`;
+  document.getElementById('pf-cash').textContent = priceSourceLive ? 'Kurse: Finnhub live' : 'Kurse: Schätzung';
+
+  // Price source badge
+  const srcBadge = document.getElementById('price-source');
+  if (priceSourceLive) { srcBadge.textContent = '● LIVE'; srcBadge.className = 'src-badge'; }
+  else { srcBadge.textContent = '● SCHÄTZUNG'; srcBadge.className = 'src-badge stale'; }
+  srcBadge.style.marginLeft = 'auto';
+
+  // Holdings
+  document.getElementById('holdings-list').innerHTML = val.positions.map(p => {
+    const plSign = p.plEUR >= 0 ? '+' : '';
+    return `
+    <div class="hold-row">
+      <div class="hold-badge">${esc(p.badge)}</div>
+      <div class="hold-mid">
+        <div class="hold-name">${esc(p.name)}</div>
+        <div class="hold-meta">${esc(p.cls)} · ${p.units.toFixed(p.units<1?4:2)} Einh.</div>
+      </div>
+      <div class="hold-right">
+        <div class="hold-val">${fmtEUR2(p.valueEUR)}</div>
+        <div class="hold-chg ${p.plEUR>=0?'pos':'neg'}">${plSign}${p.plPct.toFixed(1)}%</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Trades
+  pendingTrades = generateTrades(pf, val);
+  const actionLabel = { BUY:'KAUFEN', SELL:'VERKAUF', HOLD:'HALTEN' };
+  const actionCls = { BUY:'trade-buy', SELL:'trade-sell', HOLD:'trade-hold' };
+  document.getElementById('trades-list').innerHTML = pendingTrades.map(t => `
+    <div class="trade-row">
+      <div class="trade-action ${actionCls[t.action]}">${actionLabel[t.action]}</div>
+      <div class="trade-body">
+        <div class="trade-title">${esc(t.name)}${t.amountEUR>0 ? ' · ~'+fmtEUR(t.amountEUR) : ''}</div>
+        <div class="trade-reason">${esc(t.reason)}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Manual refresh wiring ─────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('refresh-btn');
   if (btn) btn.onclick = () => { btn._manualRefresh = true; loadBrief(); };
 });
 
-// ── Install banner (iOS Safari only) ─────────────────
+// ── Install banner ────────────────────────────────────
 function maybeShowInstallBanner() {
   const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-    || window.navigator.standalone;
-  const dismissed = localStorage.getItem('mb_install_dismissed');
-  if (isIOS && isSafari && !isStandalone && !dismissed) {
-    setTimeout(() => {
-      document.getElementById('install-banner').style.display = 'block';
-    }, 3000);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if (isIOS && isSafari && !isStandalone && !localStorage.getItem('mb_install_dismissed')) {
+    setTimeout(() => { document.getElementById('install-banner').style.display = 'block'; }, 3000);
   }
 }
-
 function dismissInstall() {
   document.getElementById('install-banner').style.display = 'none';
   localStorage.setItem('mb_install_dismissed', '1');
@@ -911,12 +1198,7 @@ function dismissInstall() {
 // ── Helpers ───────────────────────────────────────────
 function esc(str) {
   if (str == null) return '';
-  return String(str)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-</script>
-</body>
-</html>
-</body>
+</script></body>
 </html>
