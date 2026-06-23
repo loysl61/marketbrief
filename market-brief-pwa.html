@@ -395,6 +395,80 @@ body::after {
 .card:nth-child(7){animation-delay:0.35s} .card:nth-child(8){animation-delay:0.40s}
 .rec-box{animation-delay:0.45s} .alert{animation-delay:0.02s}
 
+/* ── ACCORDION / COLLAPSIBLE ── */
+.accordion {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.acc-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 15px 16px;
+  cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+  transition: background 0.15s;
+  min-height: 54px;
+}
+.acc-header:active { background: var(--bg2); }
+.acc-icon {
+  font-size: 17px; flex-shrink: 0;
+  width: 24px; text-align: center;
+}
+.acc-titles { flex: 1; min-width: 0; }
+.acc-title {
+  font-size: 14px; font-weight: 600; color: var(--white);
+  line-height: 1.2;
+}
+.acc-summary {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; color: var(--muted);
+  margin-top: 2px; letter-spacing: 0.3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.acc-summary .pos { color: var(--green); }
+.acc-summary .neg { color: var(--red); }
+.acc-chevron {
+  font-size: 12px; color: var(--muted);
+  flex-shrink: 0; transition: transform 0.25s ease;
+  font-family: 'DM Mono', monospace;
+}
+.accordion.open .acc-chevron { transform: rotate(180deg); }
+.acc-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.accordion.open .acc-content { max-height: 2000px; }
+.acc-inner { padding: 0 16px 14px; }
+.acc-inner.tight { padding-top: 4px; }
+
+/* group label */
+.group-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px; color: var(--muted);
+  letter-spacing: 3px; text-transform: uppercase;
+  padding: 8px 4px 6px; margin-top: 6px;
+  display: flex; align-items: center; gap: 8px;
+}
+.group-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* live dot in summary */
+.summary-live { color: var(--green); }
+
+/* expand/collapse all button */
+.toggle-all {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; cursor: pointer; -webkit-appearance: none;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--gold); letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.toggle-all:active { opacity: 0.6; }
+
 </style>
 </head>
 <body>
@@ -409,13 +483,19 @@ body::after {
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
   </div>
   <div class="key-form">
-    <div class="key-lbl">Finnhub API Key (für echte Kurse)</div>
+    <div class="key-lbl">Finnhub API Key (US-Aktien)</div>
     <input type="password" id="finnhub-key-input" placeholder="z.B. cXXXXXXXXXXXXXXXX"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div class="key-form">
+    <div class="key-lbl">Twelve Data Key (DAX, Gold, Öl) — optional</div>
+    <input type="password" id="twelvedata-key-input" placeholder="z.B. abcd1234…"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button class="btn-primary" onclick="saveKey()">Starten →</button>
   </div>
   <a class="hint-link" href="https://console.anthropic.com/" target="_blank">Anthropic Key → console.anthropic.com</a>
   <a class="hint-link" href="https://finnhub.io/register" target="_blank">Finnhub Key (gratis) → finnhub.io/register</a>
+  <a class="hint-link" href="https://twelvedata.com/apikey" target="_blank">Twelve Data Key (gratis) → twelvedata.com/apikey</a>
 </div>
 
 <!-- LOADING SCREEN -->
@@ -454,13 +534,16 @@ body::after {
   <div class="stream">
 
     <div id="hdr-date"></div>
+    <div id="data-legend" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.5px;margin-top:-6px;line-height:1.5;">
+      <span style="color:var(--green)">●</span> = Live-Kurs (Finnhub · CoinGecko · Twelve Data) · übrige = KI-Einordnung
+    </div>
 
     <!-- Alert -->
     <div class="alert" id="alert-banner" style="display:none">
       <span>⚠</span><span id="alert-text"></span>
     </div>
 
-    <!-- Sentiment -->
+    <!-- Sentiment (always visible) -->
     <div class="card">
       <div class="sent-wrap">
         <div class="sent-bar-labels">
@@ -476,54 +559,117 @@ body::after {
       </div>
     </div>
 
+    <!-- Toggle all -->
+    <div class="toggle-all" id="toggle-all" onclick="toggleAll()">⊕ ALLE AUFKLAPPEN</div>
+
+    <!-- ═══════ GRUPPE: MÄRKTE ═══════ -->
+    <div class="group-label">Märkte</div>
+
     <!-- US Markets -->
-    <div class="card">
-      <div class="card-title">🇺🇸 US-Märkte</div>
-      <div class="card-body" id="us-markets"></div>
+    <div class="accordion" data-acc="us">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🇺🇸</span>
+        <div class="acc-titles">
+          <div class="acc-title">US-Märkte</div>
+          <div class="acc-summary" id="sum-us">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="us-markets"></div></div>
     </div>
 
     <!-- EU Markets -->
-    <div class="card">
-      <div class="card-title">🌍 Europa &amp; Rohstoffe</div>
-      <div class="card-body" id="eu-markets"></div>
+    <div class="accordion" data-acc="eu">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🌍</span>
+        <div class="acc-titles">
+          <div class="acc-title">Europa &amp; Rohstoffe</div>
+          <div class="acc-summary" id="sum-eu">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="eu-markets"></div></div>
+    </div>
+
+    <!-- Swiss -->
+    <div class="accordion" data-acc="swiss">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🇨🇭</span>
+        <div class="acc-titles">
+          <div class="acc-title">Schweiz (SMI)</div>
+          <div class="acc-summary" id="sum-swiss">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="swiss-markets"></div></div>
     </div>
 
     <!-- Crypto -->
-    <div class="card">
-      <div class="card-title">₿ Krypto</div>
-      <div class="card-body">
-        <div class="crypto-grid" id="crypto-grid"></div>
+    <div class="accordion" data-acc="crypto">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">₿</span>
+        <div class="acc-titles">
+          <div class="acc-title">Krypto</div>
+          <div class="acc-summary" id="sum-crypto">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
       </div>
+      <div class="acc-content"><div class="acc-inner tight"><div class="crypto-grid" id="crypto-grid"></div></div></div>
     </div>
 
     <!-- Stocks -->
-    <div class="card">
-      <div class="card-title">📊 Einzelwerte</div>
-      <div class="card-body">
-        <div class="stocks-grid" id="stocks-grid"></div>
+    <div class="accordion" data-acc="stocks">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">📊</span>
+        <div class="acc-titles">
+          <div class="acc-title">Einzelwerte</div>
+          <div class="acc-summary" id="sum-stocks">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
       </div>
+      <div class="acc-content"><div class="acc-inner tight"><div class="stocks-grid" id="stocks-grid"></div></div></div>
     </div>
 
+    <!-- ═══════ GRUPPE: ANALYSE ═══════ -->
+    <div class="group-label">Analyse</div>
+
     <!-- Macro -->
-    <div class="card">
-      <div class="card-title">🌐 Makro</div>
-      <div class="card-body">
-        <ul class="macro-list" id="macro-list"></ul>
+    <div class="accordion" data-acc="macro">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🌐</span>
+        <div class="acc-titles">
+          <div class="acc-title">Makro-Faktoren</div>
+          <div class="acc-summary" id="sum-macro">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
       </div>
+      <div class="acc-content"><div class="acc-inner"><ul class="macro-list" id="macro-list"></ul></div></div>
     </div>
 
     <!-- Topics -->
-    <div class="card">
-      <div class="card-title">🔥 Top-Themen</div>
-      <div class="card-body" style="padding-top:10px">
-        <div class="tag-cloud" id="topics-cloud"></div>
+    <div class="accordion" data-acc="topics">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🔥</span>
+        <div class="acc-titles">
+          <div class="acc-title">Top-Themen</div>
+          <div class="acc-summary" id="sum-topics">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
       </div>
+      <div class="acc-content"><div class="acc-inner tight"><div class="tag-cloud" id="topics-cloud"></div></div></div>
     </div>
 
     <!-- Risks & Opps -->
-    <div class="card">
-      <div class="card-title">⚖ Risiken &amp; Chancen</div>
-      <div class="card-body" style="padding-top:12px">
+    <div class="accordion" data-acc="ro">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">⚖</span>
+        <div class="acc-titles">
+          <div class="acc-title">Risiken &amp; Chancen</div>
+          <div class="acc-summary" id="sum-ro">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner">
         <div class="ro-section">
           <div class="ro-label neg">Risiken</div>
           <div class="tag-cloud" id="risks-cloud"></div>
@@ -532,18 +678,34 @@ body::after {
           <div class="ro-label pos">Chancen</div>
           <div class="tag-cloud" id="opps-cloud"></div>
         </div>
-      </div>
+      </div></div>
     </div>
 
-    <!-- ═══ PORTFOLIO ═══ -->
+    <!-- Recommendation -->
+    <div class="accordion open" data-acc="rec">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">💡</span>
+        <div class="acc-titles">
+          <div class="acc-title">Handlungsempfehlung</div>
+          <div class="acc-summary">Einschätzung des Tages</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner">
+        <div class="rec-text" id="rec-text">—</div>
+      </div></div>
+    </div>
+
+    <!-- ═══════ GRUPPE: PORTFOLIO ═══════ -->
+    <div class="group-label">Musterportfolio</div>
 
     <!-- Disclaimer -->
     <div class="disclaimer">
       <span>ⓘ</span>
-      <span>SIMULATION / PAPER-TRADING — Dies ist ein fiktives Musterportfolio zu Demonstrationszwecken. Keine Anlageberatung. Echtes Investieren erfolgt auf eigenes Risiko.</span>
+      <span>SIMULATION / PAPER-TRADING — fiktives Musterportfolio. Keine Anlageberatung.</span>
     </div>
 
-    <!-- Portfolio value hero -->
+    <!-- Portfolio value hero (always visible) -->
     <div class="pf-hero">
       <div class="pf-hero-label">Musterportfolio · 10.000 € Start</div>
       <div class="pf-value" id="pf-value">—</div>
@@ -556,27 +718,36 @@ body::after {
     </div>
 
     <!-- Holdings -->
-    <div class="card">
-      <div class="card-title">💼 Positionen <span class="src-badge" id="price-source" style="margin-left:auto">● LIVE</span></div>
-      <div class="card-body" id="holdings-list"></div>
+    <div class="accordion" data-acc="holdings">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">💼</span>
+        <div class="acc-titles">
+          <div class="acc-title">Positionen</div>
+          <div class="acc-summary" id="sum-holdings">—</div>
+        </div>
+        <span class="src-badge" id="price-source" style="margin-right:8px">● LIVE</span>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="holdings-list"></div></div>
     </div>
 
-    <!-- Trade suggestions -->
-    <div class="card">
-      <div class="card-title">🔄 Kauf- / Verkaufsvorschläge</div>
-      <div class="card-body" id="trades-list" style="padding-top:8px"></div>
-      <div style="padding:0 16px 16px">
+    <!-- Trades -->
+    <div class="accordion" data-acc="trades">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🔄</span>
+        <div class="acc-titles">
+          <div class="acc-title">Kauf- / Verkaufsvorschläge</div>
+          <div class="acc-summary" id="sum-trades">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner">
+        <div id="trades-list" style="padding-top:4px"></div>
         <div class="pf-actions">
           <button class="pf-btn pf-btn-apply" onclick="applyTrades()">Vorschläge anwenden</button>
           <button class="pf-btn pf-btn-reset" onclick="resetPortfolio()">Zurücksetzen</button>
         </div>
-      </div>
-    </div>
-
-    <!-- Recommendation -->
-    <div class="rec-box">
-      <div class="rec-title">💡 Handlungsempfehlung</div>
-      <div class="rec-text" id="rec-text">—</div>
+      </div></div>
     </div>
 
     <!-- Footer -->
@@ -607,8 +778,10 @@ body::after {
 const API_ENDPOINT = 'https://marketbriefproxy.loysl61.workers.dev/';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
+const TWELVEDATA_BASE = 'https://api.twelvedata.com';
 const KEY_STORAGE  = 'mb_api_key';
 const FINNHUB_KEY_STORAGE = 'mb_finnhub_key';
+const TWELVEDATA_KEY_STORAGE = 'mb_twelvedata_key';
 const CACHE_KEY    = 'mb_cached_brief';
 const CACHE_TS_KEY = 'mb_cache_ts';
 const PORTFOLIO_KEY = 'mb_portfolio';
@@ -623,6 +796,36 @@ const UNIVERSE = [
   { sym: 'BTC',   coingecko: 'bitcoin',           name: 'Bitcoin',        cls: 'Krypto',         badge: 'BTC',  source: 'coingecko' },
   { sym: 'ETH',   coingecko: 'ethereum',          name: 'Ethereum',       cls: 'Krypto',         badge: 'ETH',  source: 'coingecko' },
 ];
+
+// Index ETF proxies for live US-market quotes (Finnhub free tier).
+// Real indices (^GSPC, ^VIX…) are NOT available on free tier, so we use tracking ETFs.
+const INDEX_PROXIES = [
+  { key: 'S&P 500', finnhub: 'SPY', sub: 'via SPY ETF' },
+  { key: 'Nasdaq',  finnhub: 'QQQ', sub: 'via QQQ ETF' },
+  { key: 'Dow Jones', finnhub: 'DIA', sub: 'via DIA ETF' },
+];
+let indexPrices = {}; // key -> {price, changePct}
+
+// Twelve Data symbols (free tier) — real DAX index, commodities, forex.
+// These fill the Europe & Macro cards with live values.
+const TWELVE_SYMBOLS = [
+  { key: 'DAX',           td: 'DAX',      label: 'Frankfurt' },
+  { key: 'EURO STOXX 50', td: 'SX5E',     label: 'Europa' },
+  { key: 'Öl Brent',      td: 'BRENT',    label: 'Barrel USD' },
+  { key: 'Öl WTI',        td: 'WTI',      label: 'Barrel USD' },
+  { key: 'Gold',          td: 'XAU/USD',  label: 'Troy Oz' },
+  { key: 'EUR/USD',       td: 'EUR/USD',  label: 'Devisen' },
+];
+let twelvePrices = {}; // key -> {price, changePct}
+
+// Swiss market — SMI index + top constituents (via Twelve Data, SIX exchange).
+const SWISS_SYMBOLS = [
+  { key: 'SMI',       td: 'SMI',          name: 'Swiss Market Index', sub: 'SIX · CHF',      badge: 'SMI'  },
+  { key: 'Nestlé',    td: 'NESN:SIX',     name: 'Nestlé',             sub: 'Konsumgüter',    badge: 'NESN' },
+  { key: 'Roche',     td: 'ROG:SIX',      name: 'Roche',              sub: 'Pharma',         badge: 'ROG'  },
+  { key: 'Novartis',  td: 'NOVN:SIX',     name: 'Novartis',           sub: 'Pharma',         badge: 'NOVN' },
+];
+let swissPrices = {}; // key -> {price, changePct}
 
 // ── Screens ───────────────────────────────────────────
 function show(name) {
@@ -667,13 +870,20 @@ window.addEventListener('load', () => {
 // ── Key handling ──────────────────────────────────────
 function saveKey() {
   const v = document.getElementById('api-key-input').value.trim();
-  if (!v.startsWith('sk-ant')) {
+  // Allow proceeding if Anthropic key already stored and field left blank
+  const existing = localStorage.getItem(KEY_STORAGE);
+  if (!v && existing) {
+    // keep existing anthropic key
+  } else if (!v.startsWith('sk-ant')) {
     alert('Bitte einen gültigen Anthropic API Key eingeben (beginnt mit sk-ant)');
     return;
+  } else {
+    localStorage.setItem(KEY_STORAGE, v);
   }
-  localStorage.setItem(KEY_STORAGE, v);
   const fh = document.getElementById('finnhub-key-input').value.trim();
   if (fh) localStorage.setItem(FINNHUB_KEY_STORAGE, fh);
+  const td = document.getElementById('twelvedata-key-input').value.trim();
+  if (td) localStorage.setItem(TWELVEDATA_KEY_STORAGE, td);
   loadBrief();
 }
 function resetKey() {
@@ -720,6 +930,53 @@ async function fetchAllPrices(fhKey) {
     } catch (e) {
       prices[u.sym] = null;
     }
+  }
+
+  // 1b) INDEX PROXIES (SPY/QQQ/DIA) for live US-market card
+  indexPrices = {};
+  if (fhKey) {
+    for (const ix of INDEX_PROXIES) {
+      try {
+        const q = await fetchQuote(ix.finnhub, fhKey);
+        if (q && q.price > 0) indexPrices[ix.key] = { price: q.price, changePct: q.changePct };
+      } catch (e) { /* keep Claude estimate */ }
+    }
+  }
+
+  // 1c) TWELVE DATA: real DAX, EURO STOXX, Gold, Oil, EUR/USD + Swiss market
+  twelvePrices = {};
+  swissPrices = {};
+  const tdKey = localStorage.getItem(TWELVEDATA_KEY_STORAGE);
+  if (tdKey) {
+    // Batch request: all symbols (Europe/macro + Swiss) in one call
+    try {
+      const allTd = [...TWELVE_SYMBOLS, ...SWISS_SYMBOLS];
+      const syms = allTd.map(s => s.td).join(',');
+      const url = `${TWELVEDATA_BASE}/quote?symbol=${encodeURIComponent(syms)}&apikey=${tdKey}`;
+      const r = await fetch(url);
+      if (r.ok) {
+        const d = await r.json();
+        // Europe / macro
+        for (const s of TWELVE_SYMBOLS) {
+          const row = d[s.td] || (d.symbol === s.td ? d : null);
+          if (row && row.close && !row.code) {
+            const price = parseFloat(row.close);
+            const chg = parseFloat(row.percent_change) || 0;
+            if (price > 0) twelvePrices[s.key] = { price, changePct: chg };
+            if (s.key === 'EUR/USD' && price > 0) currentEURUSD = price;
+          }
+        }
+        // Swiss market
+        for (const s of SWISS_SYMBOLS) {
+          const row = d[s.td] || (d.symbol === s.td ? d : null);
+          if (row && row.close && !row.code) {
+            const price = parseFloat(row.close);
+            const chg = parseFloat(row.percent_change) || 0;
+            if (price > 0) swissPrices[s.key] = { price, changePct: chg };
+          }
+        }
+      }
+    } catch (e) { /* keep Claude estimates */ }
   }
 
   // 2) CRYPTO via CoinGecko (free, no key, gives USD + EUR + 24h change)
@@ -996,6 +1253,8 @@ async function fetchBriefFromClaude(key) {
   const today = new Date().toLocaleDateString('de-DE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   const prompt = `Du bist ein erfahrener Finanzanalyst. Erstelle eine präzise Marktanalyse für heute, ${today}.
 
+WICHTIG: Die exakten Kurse für Indizes, Aktien und Krypto werden separat aus Live-Datenquellen (Finnhub, CoinGecko) geladen und überschreiben deine Werte. Konzentriere dich daher auf die QUALITATIVE Einordnung: Marktstimmung, Themen, Risiken, Chancen und die Handlungsempfehlung. Gib für Kurse plausible Richtwerte an, aber dein Mehrwert liegt in der Analyse, nicht in exakten Zahlen.
+
 Berücksichtige aktuelle globale Marktbedingungen, geopolitische Lage (insbesondere US-China-Beziehungen, aktuelle Konfliktherde), AI-Sektor-Entwicklungen, Kryptomarkt und makroökonomische Faktoren wie Inflation, Zinsen und Öl.
 
 Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks, kein Text davor oder danach. Exakt dieses Format:
@@ -1102,20 +1361,92 @@ function renderBrief(b, priceSourceLive) {
   else alertBanner.style.display = 'none';
 
   function buildIndexRows(items) {
-    return (items || []).map(idx => `
+    return (items || []).map(idx => {
+      // Override with live data: index proxy (Finnhub) OR Twelve Data
+      const live = indexPrices[idx.name] || twelvePrices[idx.name];
+      const isProxy = !!indexPrices[idx.name];
+      let priceStr = idx.price, changeStr = idx.change, isPos = idx.isPositive, subStr = idx.subtitle, isLive = false;
+      if (live && live.price > 0) {
+        // Format: indices/commodities with thousands, forex with 4 decimals
+        const isForex = idx.name === 'EUR/USD';
+        priceStr = isForex
+          ? live.price.toLocaleString('de-DE', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+          : live.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+        const chg = live.changePct || 0;
+        isPos = chg >= 0;
+        changeStr = (isPos ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
+        if (isProxy) {
+          const proxy = INDEX_PROXIES.find(p => p.key === idx.name);
+          subStr = proxy ? proxy.sub : idx.subtitle;
+        }
+        isLive = true;
+      }
+      return `
       <div class="idx-row">
         <div>
-          <div class="idx-name">${esc(idx.name)}</div>
-          <div class="idx-sub">${esc(idx.subtitle)}</div>
+          <div class="idx-name">${esc(idx.name)}${isLive ? ' <span style="font-size:8px;color:var(--green);font-family:\'DM Mono\',monospace">●</span>' : ''}</div>
+          <div class="idx-sub">${esc(subStr)}</div>
         </div>
         <div class="idx-right">
-          <div class="idx-price">${esc(idx.price)}</div>
-          <div class="idx-chg ${idx.isPositive ? 'pos' : 'neg'}">${esc(idx.change)}</div>
+          <div class="idx-price">${esc(priceStr)}</div>
+          <div class="idx-chg ${isPos ? 'pos' : 'neg'}">${esc(changeStr)}</div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
   document.getElementById('us-markets').innerHTML = buildIndexRows(b.usMarkets);
   document.getElementById('eu-markets').innerHTML = buildIndexRows(b.euMarkets);
+
+  // Summary helper: build a compact "Name chg · Name chg" line for top items
+  function indexSummary(items, n) {
+    return (items || []).slice(0, n).map(idx => {
+      const live = indexPrices[idx.name] || twelvePrices[idx.name];
+      let chg = idx.change, isPos = idx.isPositive;
+      if (live && live.price > 0) { isPos = (live.changePct||0) >= 0; chg = (isPos?'+':'') + (live.changePct||0).toFixed(1) + '%'; }
+      const short = idx.name.replace('S&P 500','S&P').replace('EURO STOXX 50','STOXX').replace('Dow Jones','Dow');
+      return `${esc(short)} <span class="${isPos?'pos':'neg'}">${esc(chg)}</span>`;
+    }).join(' · ');
+  }
+  setSummary('sum-us', indexSummary(b.usMarkets, 3));
+  setSummary('sum-eu', indexSummary(b.euMarkets, 3));
+
+  // Swiss market card — purely live (Twelve Data); shows note if no data
+  const swissEl = document.getElementById('swiss-markets');
+  if (swissEl) {
+    const hasSwiss = SWISS_SYMBOLS.some(s => swissPrices[s.key] && swissPrices[s.key].price > 0);
+    if (hasSwiss) {
+      swissEl.innerHTML = SWISS_SYMBOLS.map(s => {
+        const live = swissPrices[s.key];
+        if (!live || live.price <= 0) return '';
+        const isIndex = s.key === 'SMI';
+        const priceStr = live.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+        const chg = live.changePct || 0;
+        const isPos = chg >= 0;
+        const changeStr = (isPos ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
+        return `
+        <div class="idx-row">
+          <div>
+            <div class="idx-name">${esc(s.name)} <span style="font-size:8px;color:var(--green);font-family:'DM Mono',monospace">●</span></div>
+            <div class="idx-sub">${esc(s.sub)}</div>
+          </div>
+          <div class="idx-right">
+            <div class="idx-price">${esc(priceStr)}</div>
+            <div class="idx-chg ${isPos ? 'pos' : 'neg'}">${esc(changeStr)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      swissEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.<br>Twelve Data Key nötig für SMI, Nestlé, Roche, Novartis.</div>`;
+    }
+    // Swiss summary
+    const smi = swissPrices['SMI'];
+    if (smi && smi.price > 0) {
+      const isPos = (smi.changePct||0) >= 0;
+      setSummary('sum-swiss', `SMI ${smi.price.toLocaleString('de-DE',{maximumFractionDigits:0})} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(smi.changePct||0).toFixed(1)}%</span>`);
+    } else {
+      setSummary('sum-swiss', 'Twelve Data Key nötig');
+    }
+  }
 
   const cryptoAbbr = {'BTC/USD':'BTC','ETH/USD':'ETH','SOL/USD':'SOL'};
   // Crypto card — prefer LIVE CoinGecko prices over Claude estimates
@@ -1145,17 +1476,41 @@ function renderBrief(b, priceSourceLive) {
     </div>`;
   }).join('');
 
+  // Crypto summary
+  const btcL = currentPrices['BTC'], ethL = currentPrices['ETH'];
+  let cryptoSum = [];
+  if (btcL && btcL.price>0) cryptoSum.push(`BTC $${btcL.price.toLocaleString('de-DE',{maximumFractionDigits:0})} <span class="${(btcL.changePct||0)>=0?'pos':'neg'}">${(btcL.changePct||0)>=0?'+':''}${(btcL.changePct||0).toFixed(1)}%</span>`);
+  if (ethL && ethL.price>0) cryptoSum.push(`ETH $${ethL.price.toLocaleString('de-DE',{maximumFractionDigits:0})} <span class="${(ethL.changePct||0)>=0?'pos':'neg'}">${(ethL.changePct||0)>=0?'+':''}${(ethL.changePct||0).toFixed(1)}%</span>`);
+  setSummary('sum-crypto', cryptoSum.join(' · ') || '—');
+
   document.getElementById('stocks-grid').innerHTML = (b.stocks || []).map(s => `
     <div class="stock-cell">
       <div class="stock-name">${esc(s.name)}</div>
       <div class="stock-chg ${s.isPositive ? 'pos' : 'neg'}">${esc(s.change)}</div>
     </div>`).join('');
+  setSummary('sum-stocks', (b.stocks||[]).slice(0,3).map(s => `${esc(s.name)} <span class="${s.isPositive?'pos':'neg'}">${esc(s.change)}</span>`).join(' · '));
 
-  document.getElementById('macro-list').innerHTML = (b.macroFactors || []).map(m => `
+  // Macro — override Gold/Öl/EUR-USD with live Twelve Data values
+  const macroLiveMap = { 'Gold':'Gold', 'Brent Öl':'Öl Brent', 'Öl Brent':'Öl Brent', 'WTI Öl':'Öl WTI', 'Öl WTI':'Öl WTI', 'EUR/USD':'EUR/USD' };
+  document.getElementById('macro-list').innerHTML = (b.macroFactors || []).map(m => {
+    const liveKey = macroLiveMap[m.key];
+    const live = liveKey ? twelvePrices[liveKey] : null;
+    let valStr = m.value, cls = m.isNeutral ? 'neu' : m.isPositive ? 'pos' : 'neg', isLive = false;
+    if (live && live.price > 0) {
+      const isForex = liveKey === 'EUR/USD';
+      const p = isForex ? live.price.toFixed(4) : live.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+      const chg = live.changePct || 0;
+      const arrow = chg >= 0 ? '▲' : '▼';
+      valStr = (isForex ? p : '$' + p) + ' ' + arrow + ' ' + (chg>=0?'+':'') + chg.toFixed(1) + '%';
+      cls = chg >= 0 ? 'pos' : 'neg';
+      isLive = true;
+    }
+    return `
     <li class="macro-item">
-      <span class="macro-key">${esc(m.key)}</span>
-      <span class="macro-val ${m.isNeutral ? 'neu' : m.isPositive ? 'pos' : 'neg'}">${esc(m.value)}</span>
-    </li>`).join('');
+      <span class="macro-key">${esc(m.key)}${isLive ? ' <span style="font-size:8px;color:var(--green)">●</span>' : ''}</span>
+      <span class="macro-val ${cls}">${esc(valStr)}</span>
+    </li>`;
+  }).join('');
 
   const topicCls = { positive:'tag-pos', negative:'tag-neg', neutral:'tag-neu' };
   document.getElementById('topics-cloud').innerHTML = (b.topTopics || []).map(t =>
@@ -1163,6 +1518,12 @@ function renderBrief(b, priceSourceLive) {
   document.getElementById('risks-cloud').innerHTML = (b.risks || []).map(r => `<span class="tag tag-neg">${esc(r)}</span>`).join('');
   document.getElementById('opps-cloud').innerHTML = (b.opportunities || []).map(o => `<span class="tag tag-pos">${esc(o)}</span>`).join('');
   document.getElementById('rec-text').innerHTML = b.recommendation || '—';
+
+  // Analysis summaries
+  setSummary('sum-macro', (b.macroFactors||[]).slice(0,2).map(m=>esc(m.key)).join(' · ') + ` · +${Math.max(0,(b.macroFactors||[]).length-2)} mehr`);
+  setSummary('sum-topics', `${(b.topTopics||[]).length} Themen · ${(b.topTopics||[]).slice(0,2).map(t=>esc(t.text)).join(', ')}…`);
+  setSummary('sum-ro', `${(b.risks||[]).length} Risiken · ${(b.opportunities||[]).length} Chancen`);
+
   document.getElementById('footer-updated').textContent = 'Aktualisiert: ' + new Date().toLocaleString('de-DE', { dateStyle:'short', timeStyle:'short' });
 
   const btn = document.getElementById('refresh-btn');
@@ -1222,6 +1583,7 @@ function renderPortfolio(pf, priceSourceLive) {
       </div>
     </div>`;
   }).join('');
+  setSummary('sum-holdings', `${val.positions.length} Positionen · ${fmtEUR(total)}`);
 
   // Trades
   pendingTrades = generateTrades(pf, val);
@@ -1235,6 +1597,10 @@ function renderPortfolio(pf, priceSourceLive) {
         <div class="trade-reason">${esc(t.reason)}</div>
       </div>
     </div>`).join('');
+  const nBuy = pendingTrades.filter(t=>t.action==='BUY').length;
+  const nSell = pendingTrades.filter(t=>t.action==='SELL').length;
+  const nHold = pendingTrades.filter(t=>t.action==='HOLD').length;
+  setSummary('sum-trades', `<span class="pos">${nBuy} Kauf</span> · <span class="neg">${nSell} Verkauf</span> · ${nHold} Halten`);
 }
 
 // ── Manual refresh wiring ─────────────────────────────
@@ -1255,6 +1621,32 @@ function maybeShowInstallBanner() {
 function dismissInstall() {
   document.getElementById('install-banner').style.display = 'none';
   localStorage.setItem('mb_install_dismissed', '1');
+}
+
+// ── Accordion ─────────────────────────────────────────
+function toggleAcc(headerEl) {
+  const acc = headerEl.closest('.accordion');
+  if (acc) acc.classList.toggle('open');
+  updateToggleAllLabel();
+}
+function toggleAll() {
+  const accs = document.querySelectorAll('#dashboard .accordion');
+  const anyClosed = Array.from(accs).some(a => !a.classList.contains('open'));
+  accs.forEach(a => { if (anyClosed) a.classList.add('open'); else a.classList.remove('open'); });
+  updateToggleAllLabel();
+}
+function updateToggleAllLabel() {
+  const btn = document.getElementById('toggle-all');
+  if (!btn) return;
+  const accs = document.querySelectorAll('#dashboard .accordion');
+  const anyClosed = Array.from(accs).some(a => !a.classList.contains('open'));
+  btn.textContent = anyClosed ? '⊕ ALLE AUFKLAPPEN' : '⊖ ALLE ZUKLAPPEN';
+}
+
+// Helper to set an accordion summary line
+function setSummary(id, html) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = html;
 }
 
 // ── Helpers ───────────────────────────────────────────
