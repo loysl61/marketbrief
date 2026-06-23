@@ -623,16 +623,31 @@ const UNIVERSE = [
 ];
 
 // ── Screens ───────────────────────────────────────────
-const screens = {
-  key:      document.getElementById('key-screen'),
-  loading:  document.getElementById('loading-screen'),
-  error:    document.getElementById('error-screen'),
-  dash:     document.getElementById('dashboard'),
-};
 function show(name) {
-  Object.values(screens).forEach(s => s.style.display = 'none');
-  screens[name].style.display = (name === 'dash') ? 'block' : 'flex';
+  ['key-screen','loading-screen','error-screen','dashboard'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const map = { key:'key-screen', loading:'loading-screen', error:'error-screen', dash:'dashboard' };
+  const target = document.getElementById(map[name]);
+  if (target) target.style.display = (name === 'dash') ? 'block' : 'flex';
 }
+
+// Global safety net — any uncaught error shows a message instead of a black screen
+window.addEventListener('error', (e) => {
+  const em = document.getElementById('error-msg');
+  if (em) {
+    em.textContent = 'Fehler: ' + (e.message || 'unbekannt') + '\n\nZeile: ' + (e.lineno||'?') + '\nDatei: ' + ((e.filename||'').split('/').pop());
+    show('error');
+  }
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const em = document.getElementById('error-msg');
+  if (em) {
+    em.textContent = 'Promise-Fehler: ' + (e.reason?.message || String(e.reason));
+    show('error');
+  }
+});
 
 // ── State (filled each load) ──────────────────────────
 let currentPrices = {};   // sym -> {price, changePct, prevClose}
