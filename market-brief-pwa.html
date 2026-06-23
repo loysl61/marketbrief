@@ -606,6 +606,7 @@ body::after {
 // ── Constants ─────────────────────────────────────────
 const API_ENDPOINT = 'https://marketbriefproxy.loysl61.workers.dev/';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
 const KEY_STORAGE  = 'mb_api_key';
 const FINNHUB_KEY_STORAGE = 'mb_finnhub_key';
 const CACHE_KEY    = 'mb_cached_brief';
@@ -616,11 +617,11 @@ const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 // Portfolio universe — real tradeable symbols via Finnhub
 // stocks/ETFs use plain symbols; crypto uses BINANCE: prefix
 const UNIVERSE = [
-  { sym: 'NVDA',  finnhub: 'NVDA',                name: 'NVIDIA',         cls: 'Aktie · AI',     badge: 'NVDA' },
-  { sym: 'MSFT',  finnhub: 'MSFT',                name: 'Microsoft',      cls: 'Aktie · Tech',   badge: 'MSFT' },
-  { sym: 'VOO',   finnhub: 'VOO',                 name: 'S&P 500 ETF',    cls: 'ETF · Breit',    badge: 'VOO' },
-  { sym: 'BTC',   finnhub: 'BINANCE:BTCUSDT',     name: 'Bitcoin',        cls: 'Krypto',         badge: 'BTC' },
-  { sym: 'ETH',   finnhub: 'BINANCE:ETHUSDT',     name: 'Ethereum',       cls: 'Krypto',         badge: 'ETH' },
+  { sym: 'NVDA',  finnhub: 'NVDA',                name: 'NVIDIA',         cls: 'Aktie · AI',     badge: 'NVDA', source: 'finnhub' },
+  { sym: 'MSFT',  finnhub: 'MSFT',                name: 'Microsoft',      cls: 'Aktie · Tech',   badge: 'MSFT', source: 'finnhub' },
+  { sym: 'VOO',   finnhub: 'VOO',                 name: 'S&P 500 ETF',    cls: 'ETF · Breit',    badge: 'VOO',  source: 'finnhub' },
+  { sym: 'BTC',   coingecko: 'bitcoin',           name: 'Bitcoin',        cls: 'Krypto',         badge: 'BTC',  source: 'coingecko' },
+  { sym: 'ETH',   coingecko: 'ethereum',          name: 'Ethereum',       cls: 'Krypto',         badge: 'ETH',  source: 'coingecko' },
 ];
 
 // ── Screens ───────────────────────────────────────────
@@ -710,20 +711,50 @@ async function fetchQuote(finnhubSym, fhKey) {
 
 async function fetchAllPrices(fhKey) {
   const prices = {};
-  // Sequential to respect rate limits (5 symbols, well under 60/min)
-  for (const u of UNIVERSE) {
+
+  // 1) STOCKS/ETFs via Finnhub (works on free tier)
+  for (const u of UNIVERSE.filter(x => x.source === 'finnhub')) {
     try {
       const q = await fetchQuote(u.finnhub, fhKey);
       prices[u.sym] = q;
     } catch (e) {
-      prices[u.sym] = null; // mark failed
+      prices[u.sym] = null;
     }
   }
-  // EUR/USD for currency conversion
+
+  // 2) CRYPTO via CoinGecko (free, no key, gives USD + EUR + 24h change)
   try {
-    const fx = await fetchQuote('OANDA:EUR_USD', fhKey);
-    if (fx.price > 0) currentEURUSD = fx.price;
-  } catch {}
+    const ids = UNIVERSE.filter(x => x.source === 'coingecko').map(x => x.coingecko).join(',');
+    const cgUrl = `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd,eur&include_24hr_change=true`;
+    const r = await fetch(cgUrl);
+    if (r.ok) {
+      const d = await r.json();
+      for (const u of UNIVERSE.filter(x => x.source === 'coingecko')) {
+        const row = d[u.coingecko];
+        if (row && row.usd) {
+          prices[u.sym] = {
+            price: row.usd,                    // USD price (for consistent conversion)
+            priceEUR: row.eur || 0,            // direct EUR price from CoinGecko
+            prevClose: 0,
+            changePct: row.usd_24h_change || 0
+          };
+          // Derive EUR/USD from BTC's dual quote (most reliable live rate)
+          if (row.usd && row.eur && u.sym === 'BTC') {
+            currentEURUSD = row.usd / row.eur;
+          }
+        } else {
+          prices[u.sym] = null;
+        }
+      }
+    } else {
+      for (const u of UNIVERSE.filter(x => x.source === 'coingecko')) prices[u.sym] = null;
+    }
+  } catch (e) {
+    for (const u of UNIVERSE.filter(x => x.source === 'coingecko')) prices[u.sym] = null;
+  }
+
+  // 3) EUR/USD rate: try CoinGecko's tether (USDT≈USD) priced in EUR as cross-check.
+  //    Already derived from BTC above; if that failed, keep fallback.
   return prices;
 }
 
@@ -736,6 +767,15 @@ function getPortfolio() {
 }
 function savePortfolio(pf) {
   try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(pf)); } catch {}
+}
+
+// Returns the best available EUR price for a symbol, or 0 if unavailable
+function priceInEUR(sym) {
+  const q = currentPrices[sym];
+  if (!q) return 0;
+  if (q.priceEUR && q.priceEUR > 0) return q.priceEUR;   // direct EUR (CoinGecko)
+  if (q.price && q.price > 0) return q.price / currentEURUSD; // USD -> EUR
+  return 0;
 }
 
 // Build the INITIAL portfolio (first run) — equal-ish growth allocation
@@ -751,15 +791,13 @@ function createInitialPortfolio() {
   };
   const startCapitalEUR = 10000;
   const holdings = {};
-  // Convert each EUR slice into units using current USD price -> EUR
   for (const u of UNIVERSE) {
-    const q = currentPrices[u.sym];
     const allocEUR = startCapitalEUR * (targetAlloc[u.sym] || 0);
-    if (q && q.price > 0) {
-      const priceEUR = q.price / currentEURUSD;
+    const priceEUR = priceInEUR(u.sym);
+    if (priceEUR > 0) {
       holdings[u.sym] = {
         units: allocEUR / priceEUR,
-        avgCostEUR: priceEUR,        // cost basis per unit
+        avgCostEUR: priceEUR,
         targetAlloc: targetAlloc[u.sym]
       };
     } else {
@@ -785,7 +823,8 @@ function computePortfolioValue(pf) {
     const h = pf.holdings[u.sym];
     if (!h || h.units <= 0) continue;
     const q = currentPrices[u.sym];
-    const priceEUR = (q && q.price > 0) ? q.price / currentEURUSD : h.avgCostEUR;
+    const livePriceEUR = priceInEUR(u.sym);
+    const priceEUR = livePriceEUR > 0 ? livePriceEUR : h.avgCostEUR;
     const valueEUR = h.units * priceEUR;
     const costEUR = h.units * h.avgCostEUR;
     const plEUR = valueEUR - costEUR;
@@ -851,8 +890,8 @@ function applyTrades() {
   for (const u of UNIVERSE) {
     const h = pf.holdings[u.sym];
     if (!h) continue;
-    const q = currentPrices[u.sym];
-    const priceEUR = (q && q.price > 0) ? q.price / currentEURUSD : h.avgCostEUR;
+    const livePriceEUR = priceInEUR(u.sym);
+    const priceEUR = livePriceEUR > 0 ? livePriceEUR : h.avgCostEUR;
     if (priceEUR <= 0) continue;
     const targetValueEUR = total * (h.targetAlloc || 0);
     const newUnits = targetValueEUR / priceEUR;
@@ -894,23 +933,17 @@ async function loadBrief() {
   const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
 
   try {
-    // 1) Fetch REAL prices from Finnhub (if key present)
+    // 1) Fetch REAL prices: stocks via Finnhub, crypto via CoinGecko.
+    //    Crypto loads even WITHOUT a Finnhub key (CoinGecko needs none).
     let priceSourceLive = false;
-    if (fhKey) {
-      try {
-        currentPrices = await fetchAllPrices(fhKey);
-        priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0);
-      } catch (e) {
-        priceSourceLive = false;
-      }
-    }
+    currentPrices = await fetchAllPrices(fhKey || '');
+    priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0);
 
     // 2) Fetch qualitative brief from Claude (cached 4h unless manual)
     let brief = (btn && btn._manualRefresh) ? null : getCached();
     if (!brief) {
       brief = await fetchBriefFromClaude(key);
       setCache(brief);
-    } else {
     }
     if (btn) btn._manualRefresh = false;
 
@@ -922,7 +955,6 @@ async function loadBrief() {
       }
       pf = createInitialPortfolio();
       savePortfolio(pf);
-    } else {
     }
 
     // 4) Render everything
@@ -1086,19 +1118,32 @@ function renderBrief(b, priceSourceLive) {
   document.getElementById('eu-markets').innerHTML = buildIndexRows(b.euMarkets);
 
   const cryptoAbbr = {'BTC/USD':'BTC','ETH/USD':'ETH','SOL/USD':'SOL'};
-  document.getElementById('crypto-grid').innerHTML = (b.crypto || []).map(c => `
+  // Crypto card — prefer LIVE CoinGecko prices over Claude estimates
+  const cgSymMap = { 'BTC/USD':'BTC', 'ETH/USD':'ETH', 'SOL/USD':'SOL' };
+  document.getElementById('crypto-grid').innerHTML = (b.crypto || []).map(c => {
+    const liveSym = cgSymMap[c.symbol];
+    const live = liveSym ? currentPrices[liveSym] : null;
+    let priceStr = c.price, changeStr = c.change, isPos = c.isPositive;
+    if (live && live.price > 0) {
+      priceStr = '$' + live.price.toLocaleString('de-DE', { maximumFractionDigits: live.price < 10 ? 2 : 0 });
+      const chg = live.changePct || 0;
+      isPos = chg >= 0;
+      changeStr = (isPos ? '▲ +' : '▼ ') + chg.toFixed(1) + '%';
+    }
+    return `
     <div class="crypto-cell">
       <div class="crypto-icon">${esc(cryptoAbbr[c.symbol] || c.symbol.split('/')[0])}</div>
       <div class="crypto-mid">
         <div class="crypto-sym">${esc(c.symbol)}</div>
-        <div class="crypto-note">${esc(c.note)}</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:${(c.barPercent||0)*100}%;background:${c.isPositive?'var(--green)':'var(--gold)'}"></div></div>
+        <div class="crypto-note">${esc(c.note)}${live && live.price>0 ? ' · live' : ''}</div>
+        <div class="mini-bar"><div class="mini-fill" style="width:${(c.barPercent||0)*100}%;background:${isPos?'var(--green)':'var(--gold)'}"></div></div>
       </div>
       <div class="crypto-right">
-        <div class="crypto-price">${esc(c.price)}</div>
-        <div class="crypto-chg ${c.isPositive ? 'pos' : 'neg'}">${esc(c.change)}</div>
+        <div class="crypto-price">${esc(priceStr)}</div>
+        <div class="crypto-chg ${isPos ? 'pos' : 'neg'}">${esc(changeStr)}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   document.getElementById('stocks-grid').innerHTML = (b.stocks || []).map(s => `
     <div class="stock-cell">
