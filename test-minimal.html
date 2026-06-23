@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test</title>
+</head>
+<body style="background:#08090c;color:#fff;font-family:sans-serif;padding:40px;">
+<h1 style="color:#c9a96e;">✅ Seite lädt</h1>
+<p id="status">JavaScript läuft nicht...</p>
+<p id="ver" style="color:#4ecba0;font-family:monospace;"></p>
+<button onclick="testStorage()" style="background:#c9a96e;border:none;padding:14px 24px;border-radius:8px;font-size:16px;margin-top:20px;">localStorage testen</button>
+<p id="storage" style="font-family:monospace;margin-top:16px;"></p>
+<script>
+document.getElementById('status').textContent = '✅ JavaScript läuft';
+document.getElementById('ver').textContent = 'Version: TEST-' + new Date().toISOString().slice(0,16);
+function testStorage(){
+  try {
+    const key = localStorage.getItem('mb_api_key');
+    document.getElementById('storage').textContent =
+      'API Key gespeichert: ' + (key ? 'JA (' + key.slice(0,10) + '...)' : 'NEIN');
+  } catch(e) {
+    document.getElementById('storage').textContent = 'localStorage Fehler: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>
