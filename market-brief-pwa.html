@@ -602,6 +602,20 @@ body::after {
 
 
 <script>
+// ── DEBUG OVERLAY (temporär) ──────────────────────────
+(function(){
+  const dbg = document.createElement('div');
+  dbg.id = 'debug-overlay';
+  dbg.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,0.92);color:#4ecba0;font-family:monospace;font-size:11px;padding:44px 12px 12px;max-height:50vh;overflow-y:auto;white-space:pre-wrap;border-bottom:2px solid #c9a96e;';
+  document.documentElement.appendChild(dbg);
+  window._dbg = function(msg){
+    const line = '[' + new Date().toLocaleTimeString('de-DE') + '] ' + msg;
+    dbg.textContent += line + '\n';
+    console.log(line);
+  };
+  window._dbg('Debug-Overlay aktiv. Script startet…');
+})();
+
 // ── Constants ─────────────────────────────────────────
 const API_ENDPOINT = 'https://marketbriefproxy.loysl61.workers.dev/';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
@@ -623,16 +637,31 @@ const UNIVERSE = [
 ];
 
 // ── Screens ───────────────────────────────────────────
-const screens = {
-  key:      document.getElementById('key-screen'),
-  loading:  document.getElementById('loading-screen'),
-  error:    document.getElementById('error-screen'),
-  dash:     document.getElementById('dashboard'),
-};
 function show(name) {
-  Object.values(screens).forEach(s => s.style.display = 'none');
-  screens[name].style.display = (name === 'dash') ? 'block' : 'flex';
+  ['key-screen','loading-screen','error-screen','dashboard'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const map = { key:'key-screen', loading:'loading-screen', error:'error-screen', dash:'dashboard' };
+  const target = document.getElementById(map[name]);
+  if (target) target.style.display = (name === 'dash') ? 'block' : 'flex';
 }
+
+// Global safety net — any uncaught error shows a message instead of a black screen
+window.addEventListener('error', (e) => {
+  const em = document.getElementById('error-msg');
+  if (em) {
+    em.textContent = 'Fehler: ' + (e.message || 'unbekannt') + '\n\nZeile: ' + (e.lineno||'?') + '\nDatei: ' + ((e.filename||'').split('/').pop());
+    show('error');
+  }
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const em = document.getElementById('error-msg');
+  if (em) {
+    em.textContent = 'Promise-Fehler: ' + (e.reason?.message || String(e.reason));
+    show('error');
+  }
+});
 
 // ── State (filled each load) ──────────────────────────
 let currentPrices = {};   // sym -> {price, changePct, prevClose}
@@ -641,8 +670,11 @@ let pendingTrades = [];   // trade suggestions for this session
 
 // ── Init ──────────────────────────────────────────────
 window.addEventListener('load', () => {
+  _dbg('load-Event gefeuert');
   const key = localStorage.getItem(KEY_STORAGE);
-  if (!key) { show('key'); return; }
+  _dbg('Anthropic-Key: ' + (key ? 'vorhanden' : 'FEHLT'));
+  if (!key) { _dbg('→ zeige Key-Screen'); show('key'); return; }
+  _dbg('→ rufe loadBrief() auf');
   loadBrief();
   maybeShowInstallBanner();
 });
@@ -869,53 +901,74 @@ function resetPortfolio() {
 
 // ── Main load ─────────────────────────────────────────
 async function loadBrief() {
+  _dbg('loadBrief() gestartet');
   const btn = document.getElementById('refresh-btn');
   if (btn) btn.disabled = true;
 
   show('loading');
+  _dbg('Loading-Screen angezeigt');
   const key = localStorage.getItem(KEY_STORAGE);
   if (!key) { show('key'); return; }
   const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
+  _dbg('Finnhub-Key: ' + (fhKey ? 'vorhanden' : 'fehlt (nutze Schätzung)'));
 
   try {
     // 1) Fetch REAL prices from Finnhub (if key present)
     let priceSourceLive = false;
     if (fhKey) {
+      _dbg('Hole Finnhub-Kurse…');
       try {
         currentPrices = await fetchAllPrices(fhKey);
         priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0);
+        _dbg('Finnhub fertig. Live=' + priceSourceLive);
       } catch (e) {
         priceSourceLive = false;
+        _dbg('Finnhub-Fehler: ' + e.message);
       }
     }
 
     // 2) Fetch qualitative brief from Claude (cached 4h unless manual)
+    _dbg('Hole Brief (Cache oder Claude)…');
     let brief = (btn && btn._manualRefresh) ? null : getCached();
     if (!brief) {
+      _dbg('Kein Cache → rufe Claude API…');
       brief = await fetchBriefFromClaude(key);
       setCache(brief);
+      _dbg('Claude-Antwort erhalten + gecacht');
+    } else {
+      _dbg('Brief aus Cache geladen');
     }
     if (btn) btn._manualRefresh = false;
 
     // 3) Portfolio: create on first run, else load
+    _dbg('Lade Portfolio…');
     let pf = getPortfolio();
     if (!pf) {
+      _dbg('Kein Portfolio → erstelle neues');
       if (!priceSourceLive) {
-        // Can't create portfolio without prices — use brief crypto/stock as fallback prices
         seedFallbackPrices(brief);
+        _dbg('Fallback-Preise gesetzt');
       }
       pf = createInitialPortfolio();
       savePortfolio(pf);
+      _dbg('Portfolio erstellt + gespeichert');
+    } else {
+      _dbg('Portfolio aus Speicher geladen');
     }
 
     // 4) Render everything
+    _dbg('Rendere Brief…');
     renderBrief(brief, priceSourceLive);
+    _dbg('Rendere Portfolio…');
     renderPortfolio(pf, priceSourceLive);
+    _dbg('✅ ALLES OK — zeige Dashboard');
 
     show('dash');
+    _dbg('Dashboard sichtbar. (Dieses Overlay kannst du ignorieren.)');
     window.scrollTo(0, 0);
 
   } catch (err) {
+    _dbg('❌ FEHLER: ' + (err.message || String(err)));
     const detail = [
       err.message || String(err),
       err.name ? 'Type: ' + err.name : '',
