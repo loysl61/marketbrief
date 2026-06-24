@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twelve Data Test</title>
+<style>
+  body { background: #0a0b0e; color: #d4d8e2; font-family: monospace; padding: 20px; font-size: 12px; line-height: 1.6; }
+  h2 { color: #c9a96e; font-size: 13px; margin: 20px 0 8px; letter-spacing: 1px; }
+  .box { background: #161920; border: 1px solid #1f2430; border-radius: 8px; padding: 12px; margin: 6px 0; white-space: pre-wrap; word-break: break-all; }
+  .ok { color: #4ecba0; } .err { color: #e05757; } .warn { color: #e8c547; }
+  input { background: #161920; border: 1px solid #1f2430; border-radius: 6px; padding: 10px; color: white; font-family: monospace; font-size: 12px; width: 100%; margin: 6px 0; box-sizing: border-box; }
+  button { background: #c9a96e; color: #0a0b0e; border: none; border-radius: 8px; padding: 12px 20px; font-weight: bold; cursor: pointer; margin: 6px 0; font-size: 13px; width: 100%; }
+</style>
+</head>
+<body>
+<h2>🔑 TWELVE DATA KEY</h2>
+<input type="text" id="key" placeholder="Hier deinen Twelve Data Key einfügen" value="">
+<button onclick="runTest()">Alle Symbole testen</button>
+
+<h2>📋 ERGEBNISSE</h2>
+<div class="box" id="log">Key eingeben und Test starten…</div>
+
+<script>
+// Try to prefill from stored key
+try { const k = localStorage.getItem('mb_twelvedata_key'); if (k) document.getElementById('key').value = k; } catch {}
+
+const log = document.getElementById('log');
+let out = '';
+function add(msg, cls) {
+  out += (cls ? `<span class="${cls}">${msg}</span>` : msg) + '\n';
+  log.innerHTML = out;
+}
+
+// Test variants: with and without caret prefix
+const tests = [
+  { label: 'S&P 500 (GSPC)',    sym: 'GSPC' },
+  { label: 'S&P 500 (^GSPC)',   sym: '^GSPC' },
+  { label: 'DAX (GDAXI)',       sym: 'GDAXI' },
+  { label: 'DAX (^GDAXI)',      sym: '^GDAXI' },
+  { label: 'DAX (DAX)',         sym: 'DAX' },
+  { label: 'Gold (XAU/USD)',    sym: 'XAU/USD' },
+  { label: 'EUR/USD',           sym: 'EUR/USD' },
+  { label: 'Apple (AAPL)',      sym: 'AAPL' },
+  { label: 'SMI',               sym: 'SMI' },
+  { label: 'Nestlé (NESN:SIX)', sym: 'NESN:SIX' },
+];
+
+async function runTest() {
+  out = '';
+  const key = document.getElementById('key').value.trim();
+  if (!key) { add('❌ Kein Key eingegeben', 'err'); return; }
+  add('Key: ' + key.slice(0,6) + '…' + key.slice(-4));
+  add('Teste einzeln (mit Pause gegen Rate-Limit)…\n');
+
+  for (const t of tests) {
+    try {
+      const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(t.sym)}&apikey=${key}`;
+      const r = await fetch(url);
+      const d = await r.json();
+
+      if (d.code || d.status === 'error') {
+        add(`❌ ${t.label}: ${d.message || d.code}`, 'err');
+      } else if (d.close) {
+        add(`✅ ${t.label}: ${d.close} (${d.percent_change || '?'}%)`, 'ok');
+      } else {
+        add(`⚠ ${t.label}: ${JSON.stringify(d).slice(0,100)}`, 'warn');
+      }
+    } catch (e) {
+      add(`❌ ${t.label}: ${e.message}`, 'err');
+    }
+    // 8 req/min = pause ~8s between calls to be safe; use 1s for quick test
+    await new Promise(res => setTimeout(res, 1000));
+  }
+
+  add('\n=== Batch-Test (mehrere Symbole) ===');
+  try {
+    const url = `https://api.twelvedata.com/quote?symbol=GSPC,GDAXI,XAU/USD&apikey=${key}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    add(JSON.stringify(d, null, 2).slice(0, 600));
+  } catch(e) {
+    add('❌ Batch-Fehler: ' + e.message, 'err');
+  }
+
+  add('\n✅ FERTIG — bitte Screenshot schicken!');
+}
+</script>
+</body>
+</html>
