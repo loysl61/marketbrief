@@ -806,34 +806,25 @@ const INDEX_PROXIES = [
 ];
 let indexPrices = {}; // key -> {price, changePct}
 
-// Twelve Data symbols (free tier) — real indices, commodities, forex.
-// Grouped so we can render them into the right cards.
+// Twelve Data symbols (free tier) — MAX 8 pro Minute (Rate-Limit!).
+// Index-Codes (GSPC, GDAXI) funktionieren NICHT im Free-Tier.
+// Stattdessen: ETF-Stellvertreter (laufen als normale Aktien) + Forex + Gold.
+// SPY→S&P500, EWG→DAX/Deutschland, Gold & EUR/USD direkt.
 const TWELVE_SYMBOLS = [
-  // US indices (real index symbols)
-  { key: 'S&P 500',       td: 'GSPC',     label: 'US-Leitindex', group: 'us' },
-  { key: 'Nasdaq',        td: 'IXIC',     label: 'Tech-Index',   group: 'us' },
-  { key: 'Dow Jones',     td: 'DJI',      label: '30 Blue Chips', group: 'us' },
-  { key: 'Russell 2000',  td: 'RUT',      label: 'Small Caps',   group: 'us' },
-  { key: 'VIX',           td: 'VIX',      label: 'Volatilität',  group: 'us' },
-  // Europe
-  { key: 'DAX',           td: 'GDAXI',    label: 'Frankfurt',    group: 'eu' },
-  { key: 'EURO STOXX 50', td: 'STOXX50E', label: 'Europa',       group: 'eu' },
-  { key: 'FTSE 100',      td: 'FTSE',     label: 'London',       group: 'eu' },
-  // Commodities & FX
-  { key: 'Gold',          td: 'XAU/USD',  label: 'Troy Oz',      group: 'macro' },
-  { key: 'Öl Brent',      td: 'BRENT',    label: 'Barrel USD',   group: 'macro' },
-  { key: 'Öl WTI',        td: 'WTI',      label: 'Barrel USD',   group: 'macro' },
-  { key: 'EUR/USD',       td: 'EUR/USD',  label: 'Devisen',      group: 'macro' },
+  { key: 'S&P 500',  td: 'SPY',     label: 'via SPY ETF',    group: 'us',    fx: 'usd' },
+  { key: 'Nasdaq',   td: 'QQQ',     label: 'via QQQ ETF',    group: 'us',    fx: 'usd' },
+  { key: 'Deutschland', td: 'EWG',  label: 'via EWG ETF',    group: 'eu',    fx: 'usd' },
+  { key: 'Europa',   td: 'VGK',     label: 'via VGK ETF',    group: 'eu',    fx: 'usd' },
+  { key: 'Schweiz',  td: 'EWL',     label: 'via EWL ETF',    group: 'swiss', fx: 'usd' },
+  { key: 'Gold',     td: 'XAU/USD', label: 'Troy Oz',        group: 'macro', fx: 'usd' },
+  { key: 'EUR/USD',  td: 'EUR/USD', label: 'Devisen',        group: 'macro', fx: 'none' },
 ];
 let twelvePrices = {}; // key -> {price, changePct}
 
-// Swiss market — SMI index + top constituents (via Twelve Data, SIX exchange).
-const SWISS_SYMBOLS = [
-  { key: 'SMI',       td: 'SMI',          name: 'Swiss Market Index', sub: 'SIX · CHF',      badge: 'SMI'  },
-  { key: 'Nestlé',    td: 'NESN:SIX',     name: 'Nestlé',             sub: 'Konsumgüter',    badge: 'NESN' },
-  { key: 'Roche',     td: 'ROG:SIX',      name: 'Roche',              sub: 'Pharma',         badge: 'ROG'  },
-  { key: 'Novartis',  td: 'NOVN:SIX',     name: 'Novartis',           sub: 'Pharma',         badge: 'NOVN' },
-];
+// Swiss market — wird über EWL-ETF in TWELVE_SYMBOLS abgedeckt (group:'swiss').
+// Separate Einzelwerte (NESN:SIX etc.) sind im Free-Tier nicht verfügbar und
+// würden das 8-Credit-Limit sprengen, daher hier leer.
+const SWISS_SYMBOLS = [];
 let swissPrices = {}; // key -> {price, changePct}
 
 // ── Screens ───────────────────────────────────────────
@@ -1268,13 +1259,14 @@ function buildLiveSnapshot() {
   const snap = { date: new Date().toLocaleDateString('de-DE', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
                  us: [], eu: [], swiss: [], crypto: [], macro: [], stocks: [] };
 
-  // US + EU + macro indices from Twelve Data
+  // US + EU + Swiss + macro from Twelve Data
   for (const s of TWELVE_SYMBOLS) {
     const live = twelvePrices[s.key];
     if (!live || !(live.price > 0)) continue;
     const entry = { name: s.key, sub: s.label, price: live.price, changePct: live.changePct };
     if (s.group === 'us') snap.us.push(entry);
     else if (s.group === 'eu') snap.eu.push(entry);
+    else if (s.group === 'swiss') snap.swiss.push(entry);
     else if (s.group === 'macro') snap.macro.push(entry);
   }
 
@@ -1439,40 +1431,31 @@ function renderBrief(b, priceSourceLive, snapshot) {
   setSummary('sum-us', liveSummary(snapshot.us, 3));
   setSummary('sum-eu', liveSummary(snapshot.eu, 3));
 
-  // Swiss market card — purely live (Twelve Data); shows note if no data
+  // Swiss market card — from snapshot (EWL ETF proxy)
   const swissEl = document.getElementById('swiss-markets');
   if (swissEl) {
-    const hasSwiss = SWISS_SYMBOLS.some(s => swissPrices[s.key] && swissPrices[s.key].price > 0);
-    if (hasSwiss) {
-      swissEl.innerHTML = SWISS_SYMBOLS.map(s => {
-        const live = swissPrices[s.key];
-        if (!live || live.price <= 0) return '';
-        const isIndex = s.key === 'SMI';
-        const priceStr = live.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
-        const chg = live.changePct || 0;
-        const isPos = chg >= 0;
-        const changeStr = (isPos ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
+    if (snapshot.swiss && snapshot.swiss.length) {
+      swissEl.innerHTML = snapshot.swiss.map(e => {
+        const isPos = (e.changePct||0) >= 0;
+        const priceStr = e.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+        const changeStr = (isPos ? '▲ +' : '▼ ') + (e.changePct||0).toFixed(2) + '%';
         return `
         <div class="idx-row">
           <div>
-            <div class="idx-name">${esc(s.name)} <span style="font-size:8px;color:var(--green);font-family:'DM Mono',monospace">●</span></div>
-            <div class="idx-sub">${esc(s.sub)}</div>
+            <div class="idx-name">${esc(e.name)} <span style="font-size:8px;color:var(--green);font-family:'DM Mono',monospace">●</span></div>
+            <div class="idx-sub">${esc(e.sub)}</div>
           </div>
           <div class="idx-right">
-            <div class="idx-price">${esc(priceStr)}</div>
+            <div class="idx-price">$${esc(priceStr)}</div>
             <div class="idx-chg ${isPos ? 'pos' : 'neg'}">${esc(changeStr)}</div>
           </div>
         </div>`;
       }).join('');
+      const sw = snapshot.swiss[0];
+      const isPos = (sw.changePct||0) >= 0;
+      setSummary('sum-swiss', `${esc(sw.name)} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(sw.changePct||0).toFixed(1)}%</span>`);
     } else {
-      swissEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.<br>Twelve Data Key nötig für SMI, Nestlé, Roche, Novartis.</div>`;
-    }
-    // Swiss summary
-    const smi = swissPrices['SMI'];
-    if (smi && smi.price > 0) {
-      const isPos = (smi.changePct||0) >= 0;
-      setSummary('sum-swiss', `SMI ${smi.price.toLocaleString('de-DE',{maximumFractionDigits:0})} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(smi.changePct||0).toFixed(1)}%</span>`);
-    } else {
+      swissEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.<br>Twelve Data Key nötig.</div>`;
       setSummary('sum-swiss', 'Twelve Data Key nötig');
     }
   }
