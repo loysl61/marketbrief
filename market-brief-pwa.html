@@ -785,7 +785,7 @@ const TWELVEDATA_KEY_STORAGE = 'mb_twelvedata_key';
 const CACHE_KEY    = 'mb_cached_brief';
 const CACHE_TS_KEY = 'mb_cache_ts';
 const PORTFOLIO_KEY = 'mb_portfolio';
-const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const CACHE_TTL_MS = 1 * 60 * 60 * 1000; // 1 hour — Daten sollen aktuell sein
 
 // Portfolio universe — real tradeable symbols via Finnhub
 // stocks/ETFs use plain symbols; crypto uses BINANCE: prefix
@@ -806,15 +806,24 @@ const INDEX_PROXIES = [
 ];
 let indexPrices = {}; // key -> {price, changePct}
 
-// Twelve Data symbols (free tier) — real DAX index, commodities, forex.
-// These fill the Europe & Macro cards with live values.
+// Twelve Data symbols (free tier) — real indices, commodities, forex.
+// Grouped so we can render them into the right cards.
 const TWELVE_SYMBOLS = [
-  { key: 'DAX',           td: 'DAX',      label: 'Frankfurt' },
-  { key: 'EURO STOXX 50', td: 'SX5E',     label: 'Europa' },
-  { key: 'Öl Brent',      td: 'BRENT',    label: 'Barrel USD' },
-  { key: 'Öl WTI',        td: 'WTI',      label: 'Barrel USD' },
-  { key: 'Gold',          td: 'XAU/USD',  label: 'Troy Oz' },
-  { key: 'EUR/USD',       td: 'EUR/USD',  label: 'Devisen' },
+  // US indices (real index symbols)
+  { key: 'S&P 500',       td: 'GSPC',     label: 'US-Leitindex', group: 'us' },
+  { key: 'Nasdaq',        td: 'IXIC',     label: 'Tech-Index',   group: 'us' },
+  { key: 'Dow Jones',     td: 'DJI',      label: '30 Blue Chips', group: 'us' },
+  { key: 'Russell 2000',  td: 'RUT',      label: 'Small Caps',   group: 'us' },
+  { key: 'VIX',           td: 'VIX',      label: 'Volatilität',  group: 'us' },
+  // Europe
+  { key: 'DAX',           td: 'GDAXI',    label: 'Frankfurt',    group: 'eu' },
+  { key: 'EURO STOXX 50', td: 'STOXX50E', label: 'Europa',       group: 'eu' },
+  { key: 'FTSE 100',      td: 'FTSE',     label: 'London',       group: 'eu' },
+  // Commodities & FX
+  { key: 'Gold',          td: 'XAU/USD',  label: 'Troy Oz',      group: 'macro' },
+  { key: 'Öl Brent',      td: 'BRENT',    label: 'Barrel USD',   group: 'macro' },
+  { key: 'Öl WTI',        td: 'WTI',      label: 'Barrel USD',   group: 'macro' },
+  { key: 'EUR/USD',       td: 'EUR/USD',  label: 'Devisen',      group: 'macro' },
 ];
 let twelvePrices = {}; // key -> {price, changePct}
 
@@ -1025,6 +1034,14 @@ function getPortfolio() {
 function savePortfolio(pf) {
   try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(pf)); } catch {}
 }
+// Prüft, ob ein gespeichertes Portfolio das erwartete Format hat,
+// damit alte/beschädigte Daten nicht zu Fehlern führen.
+function isValidPortfolio(pf) {
+  return pf && typeof pf === 'object'
+    && pf.holdings && typeof pf.holdings === 'object'
+    && typeof pf.startCapitalEUR === 'number'
+    && Array.isArray(pf.history);
+}
 
 // Returns the best available EUR price for a symbol, or 0 if unavailable
 function priceInEUR(sym) {
@@ -1165,8 +1182,9 @@ function applyTrades() {
   pf.history.push({ ts: Date.now(), valueEUR: total });
   if (pf.history.length > 60) pf.history = pf.history.slice(-60);
   savePortfolio(pf);
-  // Re-render
-  renderPortfolio(pf);
+  // Re-render (bestehendes Portfolio, daher portfolioIsNew = false)
+  const live = Object.values(currentPrices).some(p => p && p.price > 0) || Object.keys(twelvePrices).length > 0;
+  renderPortfolio(pf, live, false);
   // brief visual feedback
   const btn = document.querySelector('.pf-btn-apply');
   if (btn) { const t = btn.textContent; btn.textContent = '✓ Gespeichert'; setTimeout(()=>btn.textContent=t, 1500); }
@@ -1176,7 +1194,8 @@ function resetPortfolio() {
   if (!confirm('Musterportfolio auf 10.000 € zurücksetzen? Der gespeicherte Verlauf geht verloren.')) return;
   const pf = createInitialPortfolio();
   savePortfolio(pf);
-  renderPortfolio(pf);
+  const live = Object.values(currentPrices).some(p => p && p.price > 0) || Object.keys(twelvePrices).length > 0;
+  renderPortfolio(pf, live, true);
 }
 
 // ── Main load ─────────────────────────────────────────
@@ -1190,33 +1209,42 @@ async function loadBrief() {
   const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
 
   try {
-    // 1) Fetch REAL prices: stocks via Finnhub, crypto via CoinGecko.
-    //    Crypto loads even WITHOUT a Finnhub key (CoinGecko needs none).
-    let priceSourceLive = false;
+    // 1) Fetch ALL real prices: stocks (Finnhub), crypto (CoinGecko),
+    //    indices/commodities/FX (Twelve Data). No invented numbers.
     currentPrices = await fetchAllPrices(fhKey || '');
-    priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0);
+    const priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0)
+      || Object.keys(twelvePrices).length > 0;
 
-    // 2) Fetch qualitative brief from Claude (cached 4h unless manual)
+    // 2) Build a LIVE market snapshot to feed Claude's analysis
+    const snapshot = buildLiveSnapshot();
+
+    // 3) Claude analyses BASED ON the live snapshot (cached 1h unless manual)
     let brief = (btn && btn._manualRefresh) ? null : getCached();
     if (!brief) {
-      brief = await fetchBriefFromClaude(key);
+      brief = await fetchBriefFromClaude(key, snapshot);
       setCache(brief);
     }
     if (btn) btn._manualRefresh = false;
 
-    // 3) Portfolio: create on first run, else load
+    // 4) Portfolio — bestehende lokale Speicherung weiterverwenden.
+    //    Neue Bewertung setzt IMMER auf den gespeicherten Daten auf;
+    //    ein neues Portfolio wird nur beim allerersten Start erstellt.
     let pf = getPortfolio();
-    if (!pf) {
-      if (!priceSourceLive) {
-        seedFallbackPrices(brief);
-      }
+    let portfolioIsNew = false;
+    if (!pf || !isValidPortfolio(pf)) {
       pf = createInitialPortfolio();
+      savePortfolio(pf);
+      portfolioIsNew = true;
+    } else {
+      // Bestehendes Portfolio: Zeitstempel der letzten Bewertung aktualisieren,
+      // Bestände (units, Einstandskurse, Verlauf) bleiben unverändert erhalten.
+      pf.lastEvaluated = Date.now();
       savePortfolio(pf);
     }
 
-    // 4) Render everything
-    renderBrief(brief, priceSourceLive);
-    renderPortfolio(pf, priceSourceLive);
+    // 5) Render — live data only
+    renderBrief(brief, priceSourceLive, snapshot);
+    renderPortfolio(pf, priceSourceLive, portfolioIsNew);
 
     show('dash');
     window.scrollTo(0, 0);
@@ -1234,85 +1262,95 @@ async function loadBrief() {
   }
 }
 
-// Fallback: if Finnhub unavailable, parse rough prices from Claude brief
-function seedFallbackPrices(brief) {
-  currentPrices = {};
-  const parseNum = s => parseFloat(String(s).replace(/[^0-9.,]/g,'').replace('.','').replace(',','.')) || 0;
-  // crypto from brief
-  (brief.crypto||[]).forEach(c => {
-    if (c.symbol.startsWith('BTC')) currentPrices['BTC'] = { price: parseNum(c.price), changePct: 0, prevClose: 0 };
-    if (c.symbol.startsWith('ETH')) currentPrices['ETH'] = { price: parseNum(c.price), changePct: 0, prevClose: 0 };
-  });
-  // rough stock fallbacks (USD)
-  currentPrices['NVDA'] = currentPrices['NVDA'] || { price: 140, changePct: 0, prevClose: 140 };
-  currentPrices['MSFT'] = currentPrices['MSFT'] || { price: 430, changePct: 0, prevClose: 430 };
-  currentPrices['VOO']  = currentPrices['VOO']  || { price: 540, changePct: 0, prevClose: 540 };
+// Assemble a snapshot of ALL live values currently available.
+// This is both rendered AND sent to Claude as the factual basis.
+function buildLiveSnapshot() {
+  const snap = { date: new Date().toLocaleDateString('de-DE', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
+                 us: [], eu: [], swiss: [], crypto: [], macro: [], stocks: [] };
+
+  // US + EU + macro indices from Twelve Data
+  for (const s of TWELVE_SYMBOLS) {
+    const live = twelvePrices[s.key];
+    if (!live || !(live.price > 0)) continue;
+    const entry = { name: s.key, sub: s.label, price: live.price, changePct: live.changePct };
+    if (s.group === 'us') snap.us.push(entry);
+    else if (s.group === 'eu') snap.eu.push(entry);
+    else if (s.group === 'macro') snap.macro.push(entry);
+  }
+
+  // Fallback for US: if Twelve Data gave no US indices, use Finnhub ETF proxies
+  if (snap.us.length === 0) {
+    for (const ix of INDEX_PROXIES) {
+      const live = indexPrices[ix.key];
+      if (live && live.price > 0) {
+        snap.us.push({ name: ix.key, sub: ix.sub, price: live.price, changePct: live.changePct });
+      }
+    }
+  }
+
+  // Swiss from Twelve Data
+  for (const s of SWISS_SYMBOLS) {
+    const live = swissPrices[s.key];
+    if (live && live.price > 0) snap.swiss.push({ name: s.name, sub: s.sub, price: live.price, changePct: live.changePct });
+  }
+
+  // Crypto from CoinGecko
+  for (const u of UNIVERSE.filter(x => x.source === 'coingecko')) {
+    const live = currentPrices[u.sym];
+    if (live && live.price > 0) snap.crypto.push({ name: u.name, sym: u.sym, price: live.price, changePct: live.changePct });
+  }
+
+  // Individual stocks from Finnhub
+  for (const u of UNIVERSE.filter(x => x.source === 'finnhub')) {
+    const live = currentPrices[u.sym];
+    if (live && live.price > 0) snap.stocks.push({ name: u.name, sym: u.sym, price: live.price, changePct: live.changePct });
+  }
+
+  return snap;
 }
 
-async function fetchBriefFromClaude(key) {
-  const today = new Date().toLocaleDateString('de-DE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  const prompt = `Du bist ein erfahrener Finanzanalyst. Erstelle eine präzise Marktanalyse für heute, ${today}.
+// Compact text version of the snapshot for the Claude prompt
+function snapshotToText(snap) {
+  const fmt = e => `${e.name}: ${e.price.toLocaleString('de-DE',{maximumFractionDigits:2})} (${e.changePct>=0?'+':''}${e.changePct.toFixed(2)}%)`;
+  const lines = [];
+  if (snap.us.length)     lines.push('US-Indizes: ' + snap.us.map(fmt).join(' | '));
+  if (snap.eu.length)     lines.push('Europa: ' + snap.eu.map(fmt).join(' | '));
+  if (snap.swiss.length)  lines.push('Schweiz: ' + snap.swiss.map(fmt).join(' | '));
+  if (snap.crypto.length) lines.push('Krypto: ' + snap.crypto.map(fmt).join(' | '));
+  if (snap.macro.length)  lines.push('Rohstoffe/FX: ' + snap.macro.map(fmt).join(' | '));
+  if (snap.stocks.length) lines.push('Einzelaktien: ' + snap.stocks.map(fmt).join(' | '));
+  return lines.join('\n');
+}
 
-WICHTIG: Die exakten Kurse für Indizes, Aktien und Krypto werden separat aus Live-Datenquellen (Finnhub, CoinGecko) geladen und überschreiben deine Werte. Konzentriere dich daher auf die QUALITATIVE Einordnung: Marktstimmung, Themen, Risiken, Chancen und die Handlungsempfehlung. Gib für Kurse plausible Richtwerte an, aber dein Mehrwert liegt in der Analyse, nicht in exakten Zahlen.
+async function fetchBriefFromClaude(key, snapshot) {
+  const today = snapshot.date;
+  const liveData = snapshotToText(snapshot);
+  const prompt = `Du bist ein erfahrener Finanzanalyst. Heute ist ${today}.
 
-Berücksichtige aktuelle globale Marktbedingungen, geopolitische Lage (insbesondere US-China-Beziehungen, aktuelle Konfliktherde), AI-Sektor-Entwicklungen, Kryptomarkt und makroökonomische Faktoren wie Inflation, Zinsen und Öl.
+Dir liegen die folgenden ECHTEN, AKTUELLEN Live-Kursdaten von heute vor. Stütze deine GESAMTE Analyse ausschließlich auf diese Zahlen — erfinde keine eigenen Kurse, spekuliere nicht über Werte, die hier nicht stehen:
 
-Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks, kein Text davor oder danach. Exakt dieses Format:
+${liveData || '(Keine Live-Daten verfügbar — gib eine vorsichtige, allgemeine Einordnung ohne konkrete Kurse.)'}
+
+Erstelle auf Basis DIESER Daten eine Analyse. Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks:
 
 {
   "date": "${today}",
-  "sentimentScore": 45,
-  "sentimentLabel": "neutral",
-  "alertMessage": "Kurze Alert-Headline max 90 Zeichen",
-  "usMarkets": [
-    {"name":"S&P 500","subtitle":"US-Leitindex","price":"5.800","change":"▲ +0,3%","isPositive":true},
-    {"name":"Nasdaq","subtitle":"Tech-Index","price":"18.900","change":"▲ +0,5%","isPositive":true},
-    {"name":"Dow Jones","subtitle":"30 Blue Chips","price":"43.000","change":"▼ −0,1%","isPositive":false},
-    {"name":"Russell 2000","subtitle":"Small Caps","price":"2.200","change":"▼ −0,4%","isPositive":false},
-    {"name":"VIX","subtitle":"Volatilität","price":"15,2","change":"▼ −2,1%","isPositive":true}
-  ],
-  "euMarkets": [
-    {"name":"DAX","subtitle":"Frankfurt","price":"20.000","change":"▲ +0,8%","isPositive":true},
-    {"name":"EURO STOXX 50","subtitle":"Europa","price":"5.200","change":"▲ +0,5%","isPositive":true},
-    {"name":"Öl Brent","subtitle":"Barrel USD","price":"$75","change":"▼ −0,5%","isPositive":false},
-    {"name":"Gold","subtitle":"Troy Oz","price":"$3.100","change":"▲ +0,2%","isPositive":true},
-    {"name":"EUR/USD","subtitle":"Devisen","price":"1,0950","change":"▲ +0,1%","isPositive":true}
-  ],
-  "crypto": [
-    {"symbol":"BTC/USD","price":"$95.000","change":"▲ +1,2%","isPositive":true,"note":"Dominanz 58%","barPercent":0.74},
-    {"symbol":"ETH/USD","price":"$3.400","change":"▲ +0,8%","isPositive":true,"note":"Staking-Flows","barPercent":0.52},
-    {"symbol":"SOL/USD","price":"$145","change":"▼ −0,3%","isPositive":false,"note":"Support $140","barPercent":0.45}
-  ],
-  "stocks": [
-    {"name":"Nvidia","change":"+2,1%","isPositive":true},
-    {"name":"Apple","change":"+0,4%","isPositive":true},
-    {"name":"Microsoft","change":"−0,2%","isPositive":false},
-    {"name":"Tesla","change":"+1,8%","isPositive":true},
-    {"name":"Amazon","change":"−0,6%","isPositive":false},
-    {"name":"DAX-Top","change":"+1,2%","isPositive":true}
-  ],
+  "sentimentScore": <0-100, abgeleitet aus den tatsächlichen Tagesveränderungen oben>,
+  "sentimentLabel": "<bullish|neutral|cautious|bearish>",
+  "alertMessage": "<Kurze Headline max 90 Zeichen, basierend auf den auffälligsten Bewegungen oben>",
   "macroFactors": [
-    {"key":"Brent Öl","value":"$75 ▼","isPositive":false,"isNeutral":true},
-    {"key":"Gold","value":"$3.100 ▲","isPositive":true,"isNeutral":false},
-    {"key":"EUR/USD","value":"1,0950","isPositive":true,"isNeutral":false},
-    {"key":"US 10Y Yield","value":"4,2%","isPositive":false,"isNeutral":true},
-    {"key":"Fed Erwartung","value":"2 Schnitte 2025","isPositive":true,"isNeutral":false},
-    {"key":"Geopolitik","value":"Stabil","isPositive":true,"isNeutral":false}
+    <für JEDEN Rohstoff/FX-Wert oben ein Eintrag: {"key":"Name","value":"Kurs + Veränderung","isPositive":bool,"isNeutral":bool}>
   ],
   "topTopics": [
-    {"text":"AI-Infrastruktur","sentiment":"positive"},
-    {"text":"Fed Pause","sentiment":"neutral"},
-    {"text":"China PMI","sentiment":"negative"},
-    {"text":"Öl Rückgang","sentiment":"neutral"},
-    {"text":"Nvidia Earnings","sentiment":"positive"},
-    {"text":"Dollar schwächer","sentiment":"positive"}
+    <4-6 Themen, die die HEUTIGEN Bewegungen oben erklären: {"text":"...","sentiment":"positive|negative|neutral"}>
   ],
-  "risks": ["Inflation hartnäckig","Geopolitik","Rezessionsangst","KI-Bewertungen hoch"],
-  "opportunities": ["AI-Strukturwachstum","Fed-Pivot","DAX stabil","Krypto ETF-Inflows"],
-  "recommendation": "3-5 Sätze auf Deutsch. Präzise, actionable. Verwende **Fettschrift** für Schlüsselbegriffe."
+  "risks": [<3-4 konkrete Risiken, abgeleitet aus den Daten oben>],
+  "opportunities": [<3-4 konkrete Chancen, abgeleitet aus den Daten oben>],
+  "recommendation": "<3-5 Sätze auf Deutsch. Beziehe dich KONKRET auf die Live-Zahlen oben. **Fettschrift** für Schlüsselbegriffe. Schließe mit Hinweis, dass dies keine Anlageberatung ist.>"
 }
 
-Passe ALLE Zahlen und Einschätzungen an die tatsächliche Marktlage von heute an. Sei präzise und aktuell.`;
+Wichtig: sentimentScore muss zu den realen Bewegungen passen (viele Minuszeichen = niedriger Score, viele Pluszeichen = hoher Score).`;
+
 
   const res = await fetch(API_ENDPOINT, {
     method: 'POST',
@@ -1343,7 +1381,7 @@ function retryFetch() {
 }
 
 // ── Render: market brief ──────────────────────────────
-function renderBrief(b, priceSourceLive) {
+function renderBrief(b, priceSourceLive, snapshot) {
   document.getElementById('hdr-date').textContent = (b.date || '').toUpperCase();
   const sentColors = { bullish:'#4ecba0', neutral:'#e8c547', cautious:'#e8a047', bearish:'#e05757' };
   const sentLabels = { bullish:'🟢 BULLISH', neutral:'🟡 NEUTRAL', cautious:'🟠 VORSICHT', bearish:'🔴 BEARISH' };
@@ -1360,32 +1398,24 @@ function renderBrief(b, priceSourceLive) {
   if (b.alertMessage) { document.getElementById('alert-text').textContent = b.alertMessage; alertBanner.style.display = 'flex'; }
   else alertBanner.style.display = 'none';
 
-  function buildIndexRows(items) {
-    return (items || []).map(idx => {
-      // Override with live data: index proxy (Finnhub) OR Twelve Data
-      const live = indexPrices[idx.name] || twelvePrices[idx.name];
-      const isProxy = !!indexPrices[idx.name];
-      let priceStr = idx.price, changeStr = idx.change, isPos = idx.isPositive, subStr = idx.subtitle, isLive = false;
-      if (live && live.price > 0) {
-        // Format: indices/commodities with thousands, forex with 4 decimals
-        const isForex = idx.name === 'EUR/USD';
-        priceStr = isForex
-          ? live.price.toLocaleString('de-DE', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
-          : live.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
-        const chg = live.changePct || 0;
-        isPos = chg >= 0;
-        changeStr = (isPos ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
-        if (isProxy) {
-          const proxy = INDEX_PROXIES.find(p => p.key === idx.name);
-          subStr = proxy ? proxy.sub : idx.subtitle;
-        }
-        isLive = true;
-      }
+  // Render index rows from LIVE snapshot entries only
+  function liveRows(entries) {
+    if (!entries || !entries.length) {
+      return `<div style="padding:14px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.<br>Twelve Data Key nötig.</div>`;
+    }
+    return entries.map(e => {
+      const isForex = e.name === 'EUR/USD';
+      const priceStr = isForex
+        ? e.price.toLocaleString('de-DE', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
+        : e.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+      const chg = e.changePct || 0;
+      const isPos = chg >= 0;
+      const changeStr = (isPos ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
       return `
       <div class="idx-row">
         <div>
-          <div class="idx-name">${esc(idx.name)}${isLive ? ' <span style="font-size:8px;color:var(--green);font-family:\'DM Mono\',monospace">●</span>' : ''}</div>
-          <div class="idx-sub">${esc(subStr)}</div>
+          <div class="idx-name">${esc(e.name)} <span style="font-size:8px;color:var(--green);font-family:'DM Mono',monospace">●</span></div>
+          <div class="idx-sub">${esc(e.sub || '')}</div>
         </div>
         <div class="idx-right">
           <div class="idx-price">${esc(priceStr)}</div>
@@ -1394,21 +1424,20 @@ function renderBrief(b, priceSourceLive) {
       </div>`;
     }).join('');
   }
-  document.getElementById('us-markets').innerHTML = buildIndexRows(b.usMarkets);
-  document.getElementById('eu-markets').innerHTML = buildIndexRows(b.euMarkets);
+  document.getElementById('us-markets').innerHTML = liveRows(snapshot.us);
+  document.getElementById('eu-markets').innerHTML = liveRows(snapshot.eu);
 
-  // Summary helper: build a compact "Name chg · Name chg" line for top items
-  function indexSummary(items, n) {
-    return (items || []).slice(0, n).map(idx => {
-      const live = indexPrices[idx.name] || twelvePrices[idx.name];
-      let chg = idx.change, isPos = idx.isPositive;
-      if (live && live.price > 0) { isPos = (live.changePct||0) >= 0; chg = (isPos?'+':'') + (live.changePct||0).toFixed(1) + '%'; }
-      const short = idx.name.replace('S&P 500','S&P').replace('EURO STOXX 50','STOXX').replace('Dow Jones','Dow');
-      return `${esc(short)} <span class="${isPos?'pos':'neg'}">${esc(chg)}</span>`;
+  // Summary helper from live snapshot
+  function liveSummary(entries, n) {
+    if (!entries || !entries.length) return 'Keine Live-Daten';
+    return entries.slice(0, n).map(e => {
+      const isPos = (e.changePct||0) >= 0;
+      const short = e.name.replace('S&P 500','S&P').replace('EURO STOXX 50','STOXX').replace('Dow Jones','Dow');
+      return `${esc(short)} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(e.changePct||0).toFixed(1)}%</span>`;
     }).join(' · ');
   }
-  setSummary('sum-us', indexSummary(b.usMarkets, 3));
-  setSummary('sum-eu', indexSummary(b.euMarkets, 3));
+  setSummary('sum-us', liveSummary(snapshot.us, 3));
+  setSummary('sum-eu', liveSummary(snapshot.eu, 3));
 
   // Swiss market card — purely live (Twelve Data); shows note if no data
   const swissEl = document.getElementById('swiss-markets');
@@ -1448,69 +1477,73 @@ function renderBrief(b, priceSourceLive) {
     }
   }
 
-  const cryptoAbbr = {'BTC/USD':'BTC','ETH/USD':'ETH','SOL/USD':'SOL'};
-  // Crypto card — prefer LIVE CoinGecko prices over Claude estimates
-  const cgSymMap = { 'BTC/USD':'BTC', 'ETH/USD':'ETH', 'SOL/USD':'SOL' };
-  document.getElementById('crypto-grid').innerHTML = (b.crypto || []).map(c => {
-    const liveSym = cgSymMap[c.symbol];
-    const live = liveSym ? currentPrices[liveSym] : null;
-    let priceStr = c.price, changeStr = c.change, isPos = c.isPositive;
-    if (live && live.price > 0) {
-      priceStr = '$' + live.price.toLocaleString('de-DE', { maximumFractionDigits: live.price < 10 ? 2 : 0 });
-      const chg = live.changePct || 0;
-      isPos = chg >= 0;
-      changeStr = (isPos ? '▲ +' : '▼ ') + chg.toFixed(1) + '%';
-    }
-    return `
-    <div class="crypto-cell">
-      <div class="crypto-icon">${esc(cryptoAbbr[c.symbol] || c.symbol.split('/')[0])}</div>
-      <div class="crypto-mid">
-        <div class="crypto-sym">${esc(c.symbol)}</div>
-        <div class="crypto-note">${esc(c.note)}${live && live.price>0 ? ' · live' : ''}</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:${(c.barPercent||0)*100}%;background:${isPos?'var(--green)':'var(--gold)'}"></div></div>
-      </div>
-      <div class="crypto-right">
-        <div class="crypto-price">${esc(priceStr)}</div>
-        <div class="crypto-chg ${isPos ? 'pos' : 'neg'}">${esc(changeStr)}</div>
-      </div>
-    </div>`;
-  }).join('');
+  // Crypto card — LIVE CoinGecko data only
+  const cryptoAbbr2 = { 'Bitcoin':'BTC', 'Ethereum':'ETH' };
+  if (snapshot.crypto && snapshot.crypto.length) {
+    document.getElementById('crypto-grid').innerHTML = snapshot.crypto.map(c => {
+      const isPos = (c.changePct||0) >= 0;
+      const priceStr = '$' + c.price.toLocaleString('de-DE', { maximumFractionDigits: c.price < 10 ? 2 : 0 });
+      const changeStr = (isPos ? '▲ +' : '▼ ') + (c.changePct||0).toFixed(1) + '%';
+      return `
+      <div class="crypto-cell">
+        <div class="crypto-icon">${esc(cryptoAbbr2[c.name] || c.sym)}</div>
+        <div class="crypto-mid">
+          <div class="crypto-sym">${esc(c.name)} <span style="font-size:8px;color:var(--green)">●</span></div>
+          <div class="crypto-note">live</div>
+        </div>
+        <div class="crypto-right">
+          <div class="crypto-price">${esc(priceStr)}</div>
+          <div class="crypto-chg ${isPos ? 'pos' : 'neg'}">${esc(changeStr)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('crypto-grid').innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Keine Live-Krypto-Daten.</div>`;
+  }
 
   // Crypto summary
-  const btcL = currentPrices['BTC'], ethL = currentPrices['ETH'];
-  let cryptoSum = [];
-  if (btcL && btcL.price>0) cryptoSum.push(`BTC $${btcL.price.toLocaleString('de-DE',{maximumFractionDigits:0})} <span class="${(btcL.changePct||0)>=0?'pos':'neg'}">${(btcL.changePct||0)>=0?'+':''}${(btcL.changePct||0).toFixed(1)}%</span>`);
-  if (ethL && ethL.price>0) cryptoSum.push(`ETH $${ethL.price.toLocaleString('de-DE',{maximumFractionDigits:0})} <span class="${(ethL.changePct||0)>=0?'pos':'neg'}">${(ethL.changePct||0)>=0?'+':''}${(ethL.changePct||0).toFixed(1)}%</span>`);
-  setSummary('sum-crypto', cryptoSum.join(' · ') || '—');
+  const cSum = (snapshot.crypto||[]).map(c => {
+    const isPos = (c.changePct||0)>=0;
+    return `${esc(cryptoAbbr2[c.name]||c.sym)} $${c.price.toLocaleString('de-DE',{maximumFractionDigits:0})} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(c.changePct||0).toFixed(1)}%</span>`;
+  });
+  setSummary('sum-crypto', cSum.join(' · ') || 'Keine Daten');
 
-  document.getElementById('stocks-grid').innerHTML = (b.stocks || []).map(s => `
-    <div class="stock-cell">
-      <div class="stock-name">${esc(s.name)}</div>
-      <div class="stock-chg ${s.isPositive ? 'pos' : 'neg'}">${esc(s.change)}</div>
-    </div>`).join('');
-  setSummary('sum-stocks', (b.stocks||[]).slice(0,3).map(s => `${esc(s.name)} <span class="${s.isPositive?'pos':'neg'}">${esc(s.change)}</span>`).join(' · '));
+  // Stocks — LIVE Finnhub data only
+  if (snapshot.stocks && snapshot.stocks.length) {
+    document.getElementById('stocks-grid').innerHTML = snapshot.stocks.map(s => {
+      const isPos = (s.changePct||0) >= 0;
+      return `
+      <div class="stock-cell">
+        <div class="stock-name">${esc(s.name)} <span style="font-size:8px;color:var(--green)">●</span></div>
+        <div class="stock-chg ${isPos ? 'pos' : 'neg'}">${isPos?'+':''}${(s.changePct||0).toFixed(2)}%</div>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('stocks-grid').innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Finnhub Key nötig für Einzelaktien.</div>`;
+  }
+  setSummary('sum-stocks', (snapshot.stocks||[]).slice(0,3).map(s => {
+    const isPos = (s.changePct||0)>=0;
+    return `${esc(s.name)} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(s.changePct||0).toFixed(1)}%</span>`;
+  }).join(' · ') || 'Keine Daten');
 
-  // Macro — override Gold/Öl/EUR-USD with live Twelve Data values
-  const macroLiveMap = { 'Gold':'Gold', 'Brent Öl':'Öl Brent', 'Öl Brent':'Öl Brent', 'WTI Öl':'Öl WTI', 'Öl WTI':'Öl WTI', 'EUR/USD':'EUR/USD' };
-  document.getElementById('macro-list').innerHTML = (b.macroFactors || []).map(m => {
-    const liveKey = macroLiveMap[m.key];
-    const live = liveKey ? twelvePrices[liveKey] : null;
-    let valStr = m.value, cls = m.isNeutral ? 'neu' : m.isPositive ? 'pos' : 'neg', isLive = false;
-    if (live && live.price > 0) {
-      const isForex = liveKey === 'EUR/USD';
-      const p = isForex ? live.price.toFixed(4) : live.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
-      const chg = live.changePct || 0;
+  // Macro — LIVE Twelve Data commodities/FX only
+  if (snapshot.macro && snapshot.macro.length) {
+    document.getElementById('macro-list').innerHTML = snapshot.macro.map(m => {
+      const isForex = m.name === 'EUR/USD';
+      const p = isForex ? m.price.toFixed(4) : m.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+      const chg = m.changePct || 0;
       const arrow = chg >= 0 ? '▲' : '▼';
-      valStr = (isForex ? p : '$' + p) + ' ' + arrow + ' ' + (chg>=0?'+':'') + chg.toFixed(1) + '%';
-      cls = chg >= 0 ? 'pos' : 'neg';
-      isLive = true;
-    }
-    return `
-    <li class="macro-item">
-      <span class="macro-key">${esc(m.key)}${isLive ? ' <span style="font-size:8px;color:var(--green)">●</span>' : ''}</span>
-      <span class="macro-val ${cls}">${esc(valStr)}</span>
-    </li>`;
-  }).join('');
+      const valStr = (isForex ? p : '$' + p) + ' ' + arrow + ' ' + (chg>=0?'+':'') + chg.toFixed(1) + '%';
+      const cls = chg >= 0 ? 'pos' : 'neg';
+      return `
+      <li class="macro-item">
+        <span class="macro-key">${esc(m.name)} <span style="font-size:8px;color:var(--green)">●</span></span>
+        <span class="macro-val ${cls}">${esc(valStr)}</span>
+      </li>`;
+    }).join('');
+  } else {
+    document.getElementById('macro-list').innerHTML = `<li style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Twelve Data Key nötig für Gold, Öl, EUR/USD.</li>`;
+  }
 
   const topicCls = { positive:'tag-pos', negative:'tag-neg', neutral:'tag-neu' };
   document.getElementById('topics-cloud').innerHTML = (b.topTopics || []).map(t =>
@@ -1520,7 +1553,7 @@ function renderBrief(b, priceSourceLive) {
   document.getElementById('rec-text').innerHTML = b.recommendation || '—';
 
   // Analysis summaries
-  setSummary('sum-macro', (b.macroFactors||[]).slice(0,2).map(m=>esc(m.key)).join(' · ') + ` · +${Math.max(0,(b.macroFactors||[]).length-2)} mehr`);
+  setSummary('sum-macro', (snapshot.macro||[]).slice(0,2).map(m=>esc(m.name)).join(' · ') + (snapshot.macro && snapshot.macro.length>2 ? ` · +${snapshot.macro.length-2} mehr` : ''));
   setSummary('sum-topics', `${(b.topTopics||[]).length} Themen · ${(b.topTopics||[]).slice(0,2).map(t=>esc(t.text)).join(', ')}…`);
   setSummary('sum-ro', `${(b.risks||[]).length} Risiken · ${(b.opportunities||[]).length} Chancen`);
 
@@ -1534,7 +1567,7 @@ function renderBrief(b, priceSourceLive) {
 const fmtEUR = v => v.toLocaleString('de-DE', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
 const fmtEUR2 = v => v.toLocaleString('de-DE', { style:'currency', currency:'EUR', maximumFractionDigits:2 });
 
-function renderPortfolio(pf, priceSourceLive) {
+function renderPortfolio(pf, priceSourceLive, portfolioIsNew) {
   const val = computePortfolioValue(pf);
   const total = val.total;
   const startCap = pf.startCapitalEUR || 10000;
@@ -1556,10 +1589,13 @@ function renderPortfolio(pf, priceSourceLive) {
     return `<div class="alloc-seg" style="width:${w}%;background:${allocColors[p.sym]||'var(--gold)'}"></div>`;
   }).join('');
 
-  // Since / source
+  // Since / source — zeigt, ob auf gespeichertem Portfolio aufgesetzt wird
   const created = new Date(pf.createdAt).toLocaleDateString('de-DE', { day:'2-digit', month:'short', year:'numeric' });
-  document.getElementById('pf-since').textContent = `Start: ${created}`;
-  document.getElementById('pf-cash').textContent = priceSourceLive ? 'Kurse: Finnhub live' : 'Kurse: Schätzung';
+  const evals = (pf.history && pf.history.length) ? pf.history.length : 1;
+  document.getElementById('pf-since').textContent = portfolioIsNew
+    ? `Neu erstellt: ${created}`
+    : `Fortgeführt seit ${created} · ${evals} Bewertungen`;
+  document.getElementById('pf-cash').textContent = priceSourceLive ? 'Kurse: live' : 'Kurse: n/a';
 
   // Price source badge
   const srcBadge = document.getElementById('price-source');
