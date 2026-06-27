@@ -457,6 +457,25 @@ body::after {
 /* live dot in summary */
 .summary-live { color: var(--green); }
 
+/* news items */
+.news-item {
+  display: block;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+}
+.news-item:last-child { border-bottom: none; }
+.news-headline {
+  font-size: 13px; font-weight: 500; color: var(--white);
+  line-height: 1.4; margin-bottom: 4px;
+}
+.news-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; color: var(--muted);
+  display: flex; gap: 8px; align-items: center;
+}
+.news-source { color: var(--gold); }
+
 /* expand/collapse all button */
 .toggle-all {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -659,6 +678,19 @@ body::after {
       <div class="acc-content"><div class="acc-inner tight"><div class="tag-cloud" id="topics-cloud"></div></div></div>
     </div>
 
+    <!-- News -->
+    <div class="accordion" data-acc="news">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">📰</span>
+        <div class="acc-titles">
+          <div class="acc-title">Schlagzeilen</div>
+          <div class="acc-summary" id="sum-news">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="news-list"></div></div>
+    </div>
+
     <!-- Risks & Opps -->
     <div class="accordion" data-acc="ro">
       <div class="acc-header" onclick="toggleAcc(this)">
@@ -715,6 +747,19 @@ body::after {
         <span id="pf-since">—</span>
         <span id="pf-cash">—</span>
       </div>
+    </div>
+
+    <!-- Performance Chart -->
+    <div class="accordion open" data-acc="chart">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">📈</span>
+        <div class="acc-titles">
+          <div class="acc-title">Wertentwicklung</div>
+          <div class="acc-summary" id="sum-chart">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="chart-area"></div></div>
     </div>
 
     <!-- Holdings -->
@@ -1015,7 +1060,36 @@ async function fetchAllPrices(fhKey) {
   return prices;
 }
 
-// ── PORTFOLIO: storage ────────────────────────────────
+// ── NEWS: fetch latest market headlines from Finnhub ──
+let currentNews = []; // array of {headline, summary, source, datetime, url}
+async function fetchMarketNews(fhKey) {
+  if (!fhKey) { currentNews = []; return; }
+  try {
+    const url = `${FINNHUB_BASE}/news?category=general&token=${fhKey}`;
+    const r = await fetch(url);
+    if (!r.ok) { currentNews = []; return; }
+    const d = await r.json();
+    if (!Array.isArray(d)) { currentNews = []; return; }
+    // Keep the most recent items, dedupe by headline
+    const seen = new Set();
+    currentNews = d
+      .filter(n => n.headline && n.datetime)
+      .sort((a, b) => b.datetime - a.datetime)
+      .filter(n => { if (seen.has(n.headline)) return false; seen.add(n.headline); return true; })
+      .slice(0, 8)
+      .map(n => ({
+        headline: n.headline,
+        summary: (n.summary || '').slice(0, 200),
+        source: n.source || '',
+        datetime: n.datetime,
+        url: n.url || ''
+      }));
+  } catch (e) {
+    currentNews = [];
+  }
+}
+
+
 function getPortfolio() {
   try {
     const raw = localStorage.getItem(PORTFOLIO_KEY);
@@ -1069,15 +1143,39 @@ function createInitialPortfolio() {
       holdings[u.sym] = { units: 0, avgCostEUR: 0, targetAlloc: targetAlloc[u.sym] };
     }
   }
+  const spyNow = (twelvePrices['S&P 500'] && twelvePrices['S&P 500'].price) || 0;
   const pf = {
     createdAt: Date.now(),
     lastEvaluated: Date.now(),
     startCapitalEUR,
     cashEUR: 0,
     holdings,
-    history: [{ ts: Date.now(), valueEUR: startCapitalEUR }]
+    benchmarkStart: spyNow,   // S&P-500-Stand zum Start (für Vergleich)
+    history: [{ ts: Date.now(), valueEUR: startCapitalEUR, spy: spyNow }]
   };
   return pf;
+}
+
+// Zeichnet einen Verlaufspunkt auf — max. 1 pro Kalendertag.
+// Speichert Portfoliowert UND S&P-500-Stand für den Benchmark-Vergleich.
+function recordHistoryPoint(pf) {
+  if (!Array.isArray(pf.history)) pf.history = [];
+  const val = computePortfolioValue(pf).total;
+  const spy = (twelvePrices['S&P 500'] && twelvePrices['S&P 500'].price) || 0;
+  // benchmarkStart nachrüsten, falls altes Portfolio ohne dieses Feld
+  if (!pf.benchmarkStart && spy > 0) {
+    pf.benchmarkStart = (pf.history[0] && pf.history[0].spy) || spy;
+  }
+  const today = new Date().toDateString();
+  const last = pf.history[pf.history.length - 1];
+  if (last && new Date(last.ts).toDateString() === today) {
+    // Heutigen Punkt aktualisieren statt doppelt anlegen
+    last.valueEUR = val;
+    if (spy > 0) last.spy = spy;
+  } else {
+    pf.history.push({ ts: Date.now(), valueEUR: val, spy });
+  }
+  if (pf.history.length > 90) pf.history = pf.history.slice(-90);
 }
 
 // Compute current portfolio value in EUR
@@ -1206,13 +1304,16 @@ async function loadBrief() {
     const priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0)
       || Object.keys(twelvePrices).length > 0;
 
+    // 1b) Fetch latest market news (Finnhub) — feeds the analysis
+    await fetchMarketNews(fhKey || '');
+
     // 2) Build a LIVE market snapshot to feed Claude's analysis
     const snapshot = buildLiveSnapshot();
 
-    // 3) Claude analyses BASED ON the live snapshot (cached 1h unless manual)
+    // 3) Claude analyses BASED ON live snapshot + news (cached 1h unless manual)
     let brief = (btn && btn._manualRefresh) ? null : getCached();
     if (!brief) {
-      brief = await fetchBriefFromClaude(key, snapshot);
+      brief = await fetchBriefFromClaude(key, snapshot, currentNews);
       setCache(brief);
     }
     if (btn) btn._manualRefresh = false;
@@ -1230,8 +1331,11 @@ async function loadBrief() {
       // Bestehendes Portfolio: Zeitstempel der letzten Bewertung aktualisieren,
       // Bestände (units, Einstandskurse, Verlauf) bleiben unverändert erhalten.
       pf.lastEvaluated = Date.now();
-      savePortfolio(pf);
     }
+
+    // Verlaufspunkt einmal pro Tag aufzeichnen (Wert + S&P-500-Benchmark)
+    recordHistoryPoint(pf);
+    savePortfolio(pf);
 
     // 5) Render — live data only
     renderBrief(brief, priceSourceLive, snapshot);
@@ -1314,31 +1418,35 @@ function snapshotToText(snap) {
   return lines.join('\n');
 }
 
-async function fetchBriefFromClaude(key, snapshot) {
+async function fetchBriefFromClaude(key, snapshot, news) {
   const today = snapshot.date;
   const liveData = snapshotToText(snapshot);
+  // Format news headlines for the prompt
+  const newsText = (news && news.length)
+    ? news.map((n, i) => `${i+1}. ${n.headline}${n.summary ? ' — ' + n.summary : ''} (${n.source})`).join('\n')
+    : '';
   const prompt = `Du bist ein erfahrener Finanzanalyst. Heute ist ${today}.
 
 Dir liegen die folgenden ECHTEN, AKTUELLEN Live-Kursdaten von heute vor. Stütze deine GESAMTE Analyse ausschließlich auf diese Zahlen — erfinde keine eigenen Kurse, spekuliere nicht über Werte, die hier nicht stehen:
 
 ${liveData || '(Keine Live-Daten verfügbar — gib eine vorsichtige, allgemeine Einordnung ohne konkrete Kurse.)'}
-
-Erstelle auf Basis DIESER Daten eine Analyse. Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks:
+${newsText ? `\nAKTUELLE MARKT-SCHLAGZEILEN von heute (nutze diese, um die Bewegungen zu ERKLÄREN und konkrete Themen/Risiken/Chancen abzuleiten):\n\n${newsText}\n` : ''}
+Erstelle auf Basis DIESER Daten${newsText ? ' und Schlagzeilen' : ''} eine Analyse. Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks:
 
 {
   "date": "${today}",
   "sentimentScore": <0-100, abgeleitet aus den tatsächlichen Tagesveränderungen oben>,
   "sentimentLabel": "<bullish|neutral|cautious|bearish>",
-  "alertMessage": "<Kurze Headline max 90 Zeichen, basierend auf den auffälligsten Bewegungen oben>",
+  "alertMessage": "<Kurze Headline max 90 Zeichen, basierend auf den auffälligsten Bewegungen${newsText ? ' und Schlagzeilen' : ''} oben>",
   "macroFactors": [
     <für JEDEN Rohstoff/FX-Wert oben ein Eintrag: {"key":"Name","value":"Kurs + Veränderung","isPositive":bool,"isNeutral":bool}>
   ],
   "topTopics": [
-    <4-6 Themen, die die HEUTIGEN Bewegungen oben erklären: {"text":"...","sentiment":"positive|negative|neutral"}>
+    <4-6 Themen, die die HEUTIGEN Bewegungen${newsText ? ' und Schlagzeilen' : ''} erklären: {"text":"...","sentiment":"positive|negative|neutral"}>
   ],
-  "risks": [<3-4 konkrete Risiken, abgeleitet aus den Daten oben>],
-  "opportunities": [<3-4 konkrete Chancen, abgeleitet aus den Daten oben>],
-  "recommendation": "<3-5 Sätze auf Deutsch. Beziehe dich KONKRET auf die Live-Zahlen oben. **Fettschrift** für Schlüsselbegriffe. Schließe mit Hinweis, dass dies keine Anlageberatung ist.>"
+  "risks": [<3-4 konkrete Risiken, abgeleitet aus den Daten${newsText ? '/Schlagzeilen' : ''} oben>],
+  "opportunities": [<3-4 konkrete Chancen, abgeleitet aus den Daten${newsText ? '/Schlagzeilen' : ''} oben>],
+  "recommendation": "<3-5 Sätze auf Deutsch. Beziehe dich KONKRET auf die Live-Zahlen${newsText ? ' und aktuellen Ereignisse' : ''} oben. **Fettschrift** für Schlüsselbegriffe. Schließe mit Hinweis, dass dies keine Anlageberatung ist.>"
 }
 
 Wichtig: sentimentScore muss zu den realen Bewegungen passen (viele Minuszeichen = niedriger Score, viele Pluszeichen = hoher Score).`;
@@ -1540,6 +1648,26 @@ function renderBrief(b, priceSourceLive, snapshot) {
   setSummary('sum-topics', `${(b.topTopics||[]).length} Themen · ${(b.topTopics||[]).slice(0,2).map(t=>esc(t.text)).join(', ')}…`);
   setSummary('sum-ro', `${(b.risks||[]).length} Risiken · ${(b.opportunities||[]).length} Chancen`);
 
+  // News — live headlines from Finnhub
+  const newsEl = document.getElementById('news-list');
+  if (newsEl) {
+    if (currentNews && currentNews.length) {
+      newsEl.innerHTML = currentNews.map(n => {
+        const t = new Date(n.datetime * 1000);
+        const timeStr = t.toLocaleString('de-DE', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        const link = n.url ? `href="${esc(n.url)}" target="_blank" rel="noopener"` : '';
+        return `<a class="news-item" ${link}>
+          <div class="news-headline">${esc(n.headline)}</div>
+          <div class="news-meta"><span class="news-source">${esc(n.source)}</span><span>${timeStr}</span></div>
+        </a>`;
+      }).join('');
+      setSummary('sum-news', `${currentNews.length} Meldungen · ${esc((currentNews[0].headline||'').slice(0,40))}…`);
+    } else {
+      newsEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Keine Schlagzeilen geladen. Finnhub Key nötig.</div>`;
+      setSummary('sum-news', 'Finnhub Key nötig');
+    }
+  }
+
   document.getElementById('footer-updated').textContent = 'Aktualisiert: ' + new Date().toLocaleString('de-DE', { dateStyle:'short', timeStyle:'short' });
 
   const btn = document.getElementById('refresh-btn');
@@ -1620,6 +1748,72 @@ function renderPortfolio(pf, priceSourceLive, portfolioIsNew) {
   const nSell = pendingTrades.filter(t=>t.action==='SELL').length;
   const nHold = pendingTrades.filter(t=>t.action==='HOLD').length;
   setSummary('sum-trades', `<span class="pos">${nBuy} Kauf</span> · <span class="neg">${nSell} Verkauf</span> · ${nHold} Halten`);
+
+  // Performance-Chart mit Benchmark
+  renderChart(pf, val.total);
+}
+
+// Zeichnet Wertentwicklung (Portfolio vs. S&P 500) als SVG-Liniendiagramm.
+function renderChart(pf, currentTotal) {
+  const el = document.getElementById('chart-area');
+  if (!el) return;
+  const hist = (pf.history || []).filter(h => h.valueEUR > 0);
+
+  if (hist.length < 2) {
+    el.innerHTML = `<div style="padding:14px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Noch nicht genug Verlaufsdaten.<br>Die Kurve entsteht über mehrere Tage — öffne die App täglich.</div>`;
+    setSummary('sum-chart', 'Sammelt Daten…');
+    return;
+  }
+
+  const startCap = pf.startCapitalEUR || 10000;
+  // Normalisiere beide Reihen auf 100 = Startwert (prozentuale Entwicklung)
+  const benchStart = pf.benchmarkStart || (hist[0].spy || 0);
+  const pts = hist.map(h => ({
+    pf: (h.valueEUR / startCap) * 100,
+    bench: (benchStart > 0 && h.spy > 0) ? (h.spy / benchStart) * 100 : null
+  }));
+
+  const hasBench = pts.some(p => p.bench !== null);
+  const allVals = pts.map(p => p.pf).concat(hasBench ? pts.filter(p=>p.bench!==null).map(p => p.bench) : []);
+  let lo = Math.min(...allVals), hi = Math.max(...allVals);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+
+  const W = 300, H = 120, padL = 4, padR = 4, padT = 8, padB = 8;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const x = i => padL + (i / (pts.length - 1)) * plotW;
+  const y = v => padT + (1 - (v - lo) / (hi - lo)) * plotH;
+
+  const pfPath = pts.map((p, i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(p.pf).toFixed(1)}`).join(' ');
+  let benchPath = '';
+  if (hasBench) {
+    const bp = pts.map((p, i) => p.bench !== null ? `${benchPath===''&&i===0?'M':(benchPath===''?'M':'L')}${x(i).toFixed(1)},${y(p.bench).toFixed(1)}` : '');
+    // simpler: build from valid points only
+    const valid = pts.map((p,i)=>({i,b:p.bench})).filter(o=>o.b!==null);
+    benchPath = valid.map((o,k) => `${k===0?'M':'L'}${x(o.i).toFixed(1)},${y(o.b).toFixed(1)}`).join(' ');
+  }
+
+  const pfLast = pts[pts.length-1].pf;
+  const pfColor = pfLast >= 100 ? 'var(--green)' : 'var(--red)';
+
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+      <line x1="${padL}" y1="${y(100).toFixed(1)}" x2="${W-padR}" y2="${y(100).toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,3"/>
+      ${hasBench ? `<path d="${benchPath}" fill="none" stroke="var(--muted)" stroke-width="1.5" opacity="0.7"/>` : ''}
+      <path d="${pfPath}" fill="none" stroke="${pfColor}" stroke-width="2"/>
+    </svg>
+    <div style="display:flex;gap:16px;margin-top:10px;font-family:'DM Mono',monospace;font-size:9px;">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2px;background:${pfColor};display:inline-block"></span> Portfolio ${pfLast>=100?'+':''}${(pfLast-100).toFixed(1)}%</span>
+      ${hasBench ? `<span style="display:flex;align-items:center;gap:5px;color:var(--muted)"><span style="width:14px;height:2px;background:var(--muted);display:inline-block"></span> S&amp;P 500 ${pts[pts.length-1].bench>=100?'+':''}${(pts[pts.length-1].bench-100).toFixed(1)}%</span>` : ''}
+    </div>`;
+
+  // Summary: outperformance vs benchmark
+  if (hasBench) {
+    const diff = pfLast - pts[pts.length-1].bench;
+    setSummary('sum-chart', `${diff>=0?'+':''}${diff.toFixed(1)}% ggü. S&P 500 · ${hist.length} Punkte`);
+  } else {
+    setSummary('sum-chart', `Portfolio ${pfLast>=100?'+':''}${(pfLast-100).toFixed(1)}% · ${hist.length} Punkte`);
+  }
 }
 
 // ── Manual refresh wiring ─────────────────────────────
