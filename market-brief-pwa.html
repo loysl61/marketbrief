@@ -536,6 +536,199 @@ body.light #install-banner { box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
   color: var(--yellow); line-height: 1.5;
 }
 
+/* ── PORTFOLIO (fehlende Klassen nachgerüstet) ── */
+.disclaimer {
+  background: rgba(232,197,71,0.06); border: 1px solid rgba(232,197,71,0.25);
+  border-radius: 12px; padding: 10px 13px;
+  display: flex; align-items: flex-start; gap: 8px;
+  font-family: 'DM Mono', monospace; font-size: 9px;
+  color: var(--yellow); line-height: 1.55; letter-spacing: 0.2px;
+}
+.disclaimer span:first-child { flex-shrink: 0; }
+.pf-hero {
+  background: linear-gradient(145deg, var(--bg1), var(--bg2));
+  border: 1px solid var(--border);
+  border-radius: 18px; padding: 18px 16px;
+}
+.pf-hero-label {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--muted); letter-spacing: 3px; text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.pf-value {
+  font-family: 'Libre Baskerville', serif;
+  font-size: 32px; color: var(--white); line-height: 1.1;
+}
+.pf-delta { display: flex; gap: 10px; align-items: baseline; font-family: 'DM Mono', monospace; font-size: 11px; margin-top: 4px; }
+.pf-delta-abs { font-size: 13px; font-weight: 500; }
+.alloc-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bg3); }
+.alloc-seg { height: 100%; }
+.pf-sub {
+  display: flex; justify-content: space-between;
+  font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted);
+  margin-top: 10px;
+}
+.src-badge {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--green); letter-spacing: 0.5px; flex-shrink: 0;
+}
+.src-badge.stale { color: var(--yellow); }
+.hold-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.hold-row:last-child { border-bottom: none; }
+.hold-badge {
+  width: 46px; flex-shrink: 0; text-align: center;
+  font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500;
+  color: var(--gold); background: var(--bg3);
+  border-radius: 8px; padding: 8px 0;
+}
+.hold-mid { flex: 1; min-width: 0; }
+.hold-name { font-size: 13px; font-weight: 500; color: var(--white); }
+.hold-meta { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); margin-top: 2px; }
+.hold-right { text-align: right; flex-shrink: 0; }
+.hold-val { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; color: var(--white); }
+.hold-chg { font-family: 'DM Mono', monospace; font-size: 10px; margin-top: 2px; }
+.trade-row {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.trade-row:last-child { border-bottom: none; }
+.trade-action {
+  flex-shrink: 0; min-width: 68px; text-align: center;
+  font-family: 'DM Mono', monospace; font-size: 8px; font-weight: 500;
+  letter-spacing: 1px; padding: 6px 8px; border-radius: 7px;
+}
+.trade-buy  { color: var(--green); border: 1px solid rgba(78,203,160,0.35); background: rgba(78,203,160,0.07); }
+.trade-sell { color: var(--red); border: 1px solid rgba(224,87,87,0.35); background: rgba(224,87,87,0.07); }
+.trade-hold { color: var(--muted); border: 1px solid var(--border); background: var(--bg2); }
+.trade-body { flex: 1; min-width: 0; }
+.trade-title { font-size: 13px; font-weight: 500; color: var(--white); }
+.trade-reason { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); line-height: 1.55; margin-top: 3px; }
+.pf-actions { display: flex; gap: 8px; margin-top: 14px; }
+.pf-btn {
+  flex: 1; padding: 12px; border-radius: 12px;
+  font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; -webkit-appearance: none;
+}
+.pf-btn-apply { background: var(--gold); color: #08090c; border: none; }
+.pf-btn-reset { background: none; color: var(--muted); border: 1px solid var(--border); }
+.pf-btn:active { opacity: 0.7; }
+
+/* ── DAY-TRADING ── */
+.dt-hero {
+  background: linear-gradient(145deg, var(--bg1), var(--bg2));
+  border: 1px solid var(--border);
+  border-radius: 18px; padding: 18px 16px;
+}
+.dt-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+.dt-label {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--muted); letter-spacing: 3px; text-transform: uppercase;
+}
+.dt-status {
+  font-family: 'DM Mono', monospace; font-size: 9px;
+  letter-spacing: 0.5px; text-align: right;
+}
+.dt-pl {
+  font-family: 'Libre Baskerville', serif;
+  font-size: 30px; color: var(--white); line-height: 1.1;
+  margin-bottom: 2px;
+}
+.dt-pl-sub { font-family: 'DM Mono', monospace; font-size: 10px; margin-bottom: 14px; }
+.dt-bar-track {
+  position: relative; height: 8px;
+  background: var(--bg3); border-radius: 4px;
+  overflow: visible; margin-bottom: 7px;
+}
+.dt-bar-zones {
+  position: absolute; inset: 0; border-radius: 4px; overflow: hidden; display: flex;
+}
+.dt-zone-stop { width: 33.33%; background: rgba(224,87,87,0.22); }
+.dt-zone-run  { flex: 1; background: rgba(78,203,160,0.14); }
+.dt-zero-line {
+  position: absolute; left: 33.33%; top: -3px; bottom: -3px;
+  width: 1px; background: var(--muted); opacity: 0.6;
+}
+.dt-marker {
+  position: absolute; top: 50%; transform: translate(-50%,-50%);
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--white); border: 3px solid var(--gold);
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  transition: left 0.8s cubic-bezier(0.23,1,0.32,1);
+}
+.dt-bar-ends {
+  display: flex; justify-content: space-between;
+  font-family: 'DM Mono', monospace; font-size: 8px; color: var(--muted);
+  margin-bottom: 12px;
+}
+.dt-discipline {
+  border-radius: 12px; padding: 11px 13px;
+  font-family: 'DM Mono', monospace; font-size: 10px; line-height: 1.55;
+  margin-bottom: 12px;
+}
+.dt-discipline.run  { background: rgba(201,169,110,0.06); border: 1px solid rgba(201,169,110,0.25); color: var(--gold); }
+.dt-discipline.win  { background: rgba(78,203,160,0.08); border: 1px solid rgba(78,203,160,0.35); color: var(--green); }
+.dt-discipline.stop { background: rgba(224,87,87,0.08); border: 1px solid rgba(224,87,87,0.35); color: var(--red); }
+.dt-note {
+  font-size: 13px; line-height: 1.6; color: var(--text);
+  border-top: 1px solid var(--border); padding-top: 11px;
+}
+.dt-note:empty { display: none; }
+#dt-spark { margin-bottom: 12px; }
+/* Signal rows */
+.sig-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.sig-row:last-child { border-bottom: none; }
+.sig-badge {
+  flex-shrink: 0; min-width: 88px; text-align: center;
+  font-family: 'DM Mono', monospace; font-size: 8px; font-weight: 500;
+  letter-spacing: 0.5px; padding: 5px 7px; border-radius: 7px;
+}
+.sig-badge.pos { color: var(--green); border: 1px solid rgba(78,203,160,0.35); background: rgba(78,203,160,0.07); }
+.sig-badge.neg { color: var(--red); border: 1px solid rgba(224,87,87,0.35); background: rgba(224,87,87,0.07); }
+.sig-badge.neu { color: var(--yellow); border: 1px solid rgba(232,197,71,0.3); background: rgba(232,197,71,0.06); }
+.sig-body { flex: 1; min-width: 0; }
+.sig-name { font-size: 13px; font-weight: 500; color: var(--white); }
+.sig-text { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
+.sig-chg { flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: 11px; }
+
+/* Scanner */
+.scan-section {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  letter-spacing: 2.5px; text-transform: uppercase;
+  padding: 12px 0 6px;
+}
+.scan-buy {
+  flex-shrink: 0;
+  background: var(--bg3); border: 1px solid rgba(201,169,110,0.4);
+  border-radius: 8px; padding: 7px 10px;
+  font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500;
+  color: var(--gold); cursor: pointer; -webkit-appearance: none;
+  letter-spacing: 0.3px; white-space: nowrap;
+}
+.scan-buy:active { opacity: 0.6; }
+.scan-held {
+  flex-shrink: 0;
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--green); letter-spacing: 0.3px;
+  border: 1px solid rgba(78,203,160,0.35); border-radius: 8px; padding: 7px 9px;
+}
+.hold-close {
+  flex-shrink: 0; margin-left: 6px;
+  background: none; border: 1px solid rgba(224,87,87,0.35);
+  border-radius: 8px; padding: 6px 9px;
+  font-family: 'DM Mono', monospace; font-size: 9px;
+  color: var(--red); cursor: pointer; -webkit-appearance: none;
+}
+.hold-close:active { opacity: 0.6; }
+
 </style>
 </head>
 <body>
@@ -782,6 +975,61 @@ body.light #install-banner { box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
       </div></div>
     </div>
 
+    <!-- ═══════ GRUPPE: DAY-TRADING ═══════ -->
+    <div class="group-label">Day-Trading · Cockpit</div>
+
+    <div class="disclaimer">
+      <span>ⓘ</span>
+      <span>SIMULATION — kein garantierter Gewinn möglich. Das 3%-Ziel ist ein DISZIPLIN-Instrument (Ziel erreichen ODER Verlust begrenzen → aufhören), kein Versprechen.</span>
+    </div>
+
+    <!-- Day-Trade Hero: Tages-P&L + Ziel/Stop-Balken -->
+    <div class="dt-hero">
+      <div class="dt-top">
+        <span class="dt-label">Tages-P&amp;L (seit Handelsstart)</span>
+        <span class="dt-status" id="dt-status">—</span>
+      </div>
+      <div class="dt-pl" id="dt-pl">—</div>
+      <div class="dt-pl-sub" id="dt-pl-sub">—</div>
+      <div class="dt-bar-track">
+        <div class="dt-bar-zones"><div class="dt-zone-stop"></div><div class="dt-zone-run"></div></div>
+        <div class="dt-zero-line"></div>
+        <div class="dt-marker" id="dt-marker" style="left:33.33%"></div>
+      </div>
+      <div class="dt-bar-ends">
+        <span>Stop −1,5%</span><span>±0</span><span>Ziel +3%</span>
+      </div>
+      <div id="dt-spark"></div>
+      <div class="dt-discipline run" id="dt-discipline">—</div>
+      <div class="dt-note" id="dt-note"></div>
+    </div>
+
+    <!-- Intraday-Signale -->
+    <div class="accordion open" data-acc="signals">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">⚡</span>
+        <div class="acc-titles">
+          <div class="acc-title">Intraday-Signale</div>
+          <div class="acc-summary" id="sum-signals">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="signals-list"></div></div>
+    </div>
+
+    <!-- Chancen-Scanner -->
+    <div class="accordion open" data-acc="scanner">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🔍</span>
+        <div class="acc-titles">
+          <div class="acc-title">Chancen-Scanner</div>
+          <div class="acc-summary" id="sum-scanner">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner" id="scanner-list"></div></div>
+    </div>
+
     <!-- ═══════ GRUPPE: PORTFOLIO ═══════ -->
     <div class="group-label">Musterportfolio</div>
 
@@ -891,6 +1139,38 @@ const TD_CACHE_TS  = 'mb_td_cache_ts';
 const NOTIFY_KEY   = 'mb_notify';        // Punkt 14
 const THEME_KEY    = 'mb_theme';         // Punkt 15
 const HISTORY_MAX  = 90;                 // Punkt 9: EIN einheitliches History-Limit
+
+// ── DAY-TRADING ──
+// WICHTIG: Das Tagesziel ist ein DISZIPLIN-Instrument, KEIN Gewinnversprechen.
+// Garantierte 3%/Tag existieren nicht (3%/Tag ≈ ×1.600 p.a. — unmöglich).
+// Echte Trader-Regel: Ziel ODER Verlustlimit erreicht → Handel für heute beenden.
+const DAYTRADE_KEY  = 'mb_daytrade';
+const DT_TARGET_PCT = 3.0;    // Tagesziel in %
+const DT_STOP_PCT   = -1.5;   // Tagesverlustlimit in % (asymmetrisch: 2:1 Chance/Risiko)
+const DT_AUTOREFRESH_MS = 5 * 60 * 1000; // Auto-Refresh alle 5 Min (Handelszeiten)
+
+// ── CHANCEN-SCANNER ──
+// Kuratierte Watchlist hochliquider US-Large-Caps (~50% der S&P-500-Marktkap.).
+// Ein VOLLSCAN aller Marktwerte ist im Free-Tier unmöglich (Finnhub: 60 Calls/Min).
+// Krypto: Top 30 nach Marktkap. via CoinGecko — EIN Call, komplett.
+const SCAN_WATCHLIST = [
+  { sym:'AAPL', name:'Apple' }, { sym:'GOOGL', name:'Alphabet' }, { sym:'AMZN', name:'Amazon' },
+  { sym:'META', name:'Meta' }, { sym:'TSLA', name:'Tesla' }, { sym:'AVGO', name:'Broadcom' },
+  { sym:'AMD', name:'AMD' }, { sym:'NFLX', name:'Netflix' }, { sym:'CRM', name:'Salesforce' },
+  { sym:'ORCL', name:'Oracle' }, { sym:'ADBE', name:'Adobe' }, { sym:'INTC', name:'Intel' },
+  { sym:'QCOM', name:'Qualcomm' }, { sym:'MU', name:'Micron' }, { sym:'PLTR', name:'Palantir' },
+  { sym:'COIN', name:'Coinbase' }, { sym:'UBER', name:'Uber' }, { sym:'JPM', name:'JPMorgan' },
+  { sym:'GS', name:'Goldman Sachs' }, { sym:'V', name:'Visa' }, { sym:'MA', name:'Mastercard' },
+  { sym:'XOM', name:'ExxonMobil' }, { sym:'CVX', name:'Chevron' }, { sym:'UNH', name:'UnitedHealth' },
+  { sym:'LLY', name:'Eli Lilly' }, { sym:'JNJ', name:'Johnson & Johnson' }, { sym:'WMT', name:'Walmart' },
+  { sym:'COST', name:'Costco' }, { sym:'HD', name:'Home Depot' }, { sym:'MCD', name:"McDonald's" },
+  { sym:'DIS', name:'Disney' }, { sym:'BA', name:'Boeing' }, { sym:'CAT', name:'Caterpillar' },
+];
+const SCAN_BUY_PCT = 0.05;        // Kaufgröße: 5% des Portfoliowerts pro Scanner-Trade
+const SCAN_EXIT_TARGET = 3.0;     // Exit-Vorschlag: Gewinn sichern bei +3% seit Einstieg
+const SCAN_EXIT_STOP   = -1.5;    // Exit-Vorschlag: Stop bei −1,5% seit Einstieg
+// Stablecoins/Wrapper aus dem Krypto-Scan filtern (keine "Chancen")
+const SCAN_CRYPTO_EXCLUDE = ['tether','usd-coin','dai','staked-ether','wrapped-bitcoin','weth','usds','ethena-usde','wrapped-steth','wsteth','susds','usdt0','binance-bridged-usdt-bnb-smart-chain'];
 
 // Punkt 7: Cache-TTL abhängig von Marktzeiten (lokale Zeit = Europe/Berlin beim Nutzer)
 // US-Handel Mo–Fr ca. 15:30–22:00 MEZ → kurze TTL; Wochenende/Nacht → lange TTL.
@@ -1229,6 +1509,63 @@ async function fetchMarketNews(fhKey) {
 }
 
 
+// ── CHANCEN-SCANNER: Daten holen ──────────────────────
+let scanResults = []; // {sym, name, priceEUR, priceUSD?, changePct, type:'stock'|'crypto', cg?}
+async function fetchScanData(fhKey) {
+  scanResults = [];
+  const out = [];
+
+  // 1) US-Watchlist parallel via Finnhub (Kernwerte werden wiederverwendet, nicht doppelt geholt)
+  if (fhKey) {
+    const already = new Set(UNIVERSE.filter(x => x.source === 'finnhub').map(x => x.finnhub));
+    const toFetch = SCAN_WATCHLIST.filter(w => !already.has(w.sym));
+    const res = await Promise.allSettled(
+      toFetch.map(w => fetchQuote(w.sym, fhKey).then(q => ({ w, q })))
+    );
+    for (const r of res) {
+      if (r.status === 'fulfilled' && r.value.q && r.value.q.price > 0) {
+        out.push({ sym: r.value.w.sym, name: r.value.w.name, priceUSD: r.value.q.price,
+                   changePct: r.value.q.changePct || 0, type: 'stock' });
+      }
+    }
+    for (const u of UNIVERSE.filter(x => x.source === 'finnhub')) {
+      const q = currentPrices[u.sym];
+      if (q && q.price > 0) out.push({ sym: u.sym, name: u.name, priceUSD: q.price, changePct: q.changePct || 0, type: 'stock' });
+    }
+  }
+
+  // 2) Krypto: Top 30 nach Marktkap. — EIN Call, Preise direkt in EUR
+  try {
+    const r = await fetch(`${COINGECKO_BASE}/coins/markets?vs_currency=eur&order=market_cap_desc&per_page=30&page=1&price_change_percentage=24h`);
+    if (r.ok) {
+      const d = await r.json();
+      if (Array.isArray(d)) {
+        for (const c of d) {
+          if (SCAN_CRYPTO_EXCLUDE.includes(c.id)) continue;
+          if (!(c.current_price > 0)) continue;
+          out.push({ sym: (c.symbol || '').toUpperCase(), name: c.name, priceEUR: c.current_price,
+                     changePct: c.price_change_percentage_24h || 0, type: 'crypto', cg: c.id });
+        }
+      }
+    }
+  } catch {}
+
+  // 3) EUR-Preise für Aktien ableiten
+  for (const s of out) if (s.priceUSD && !s.priceEUR) s.priceEUR = s.priceUSD / currentEURUSD;
+  scanResults = out.filter(s => s.priceEUR > 0);
+
+  // 4) Gehaltene Scanner-Positionen: Live-Preise in currentPrices spiegeln
+  const pfScan = getPortfolio();
+  if (pfScan && pfScan.holdings) {
+    for (const [sym, h] of Object.entries(pfScan.holdings)) {
+      if (!h || !h.dyn) continue;
+      const hit = scanResults.find(s => s.sym === sym && s.type === h.type);
+      if (hit) currentPrices[sym] = { price: hit.priceUSD || hit.priceEUR * currentEURUSD,
+        priceEUR: hit.priceEUR, changePct: hit.changePct, prevClose: 0 };
+    }
+  }
+}
+
 function getPortfolio() {
   try {
     const raw = localStorage.getItem(PORTFOLIO_KEY);
@@ -1321,6 +1658,7 @@ function recordHistoryPoint(pf) {
 function computePortfolioValue(pf) {
   let total = pf.cashEUR || 0;
   const positions = [];
+  const coreSyms = new Set(UNIVERSE.map(u => u.sym));
   for (const u of UNIVERSE) {
     const h = pf.holdings[u.sym];
     if (!h || h.units <= 0) continue;
@@ -1338,7 +1676,99 @@ function computePortfolioValue(pf) {
       targetAlloc: h.targetAlloc
     });
   }
+  // Dynamische Scanner-Positionen (Paper-Trades aus dem Chancen-Scanner)
+  for (const [sym, h] of Object.entries(pf.holdings)) {
+    if (coreSyms.has(sym) || !h || !h.dyn || h.units <= 0) continue;
+    const q = currentPrices[sym];
+    const livePriceEUR = (q && q.priceEUR > 0) ? q.priceEUR
+      : (q && q.price > 0 ? q.price / currentEURUSD : 0);
+    const priceEUR = livePriceEUR > 0 ? livePriceEUR : (h.lastPriceEUR || h.avgCostEUR);
+    if (livePriceEUR > 0) h.lastPriceEUR = livePriceEUR; // Fallback für später merken
+    const valueEUR = h.units * priceEUR;
+    const costEUR = h.units * h.avgCostEUR;
+    const plEUR = valueEUR - costEUR;
+    total += valueEUR;
+    positions.push({
+      sym, name: h.name || sym,
+      cls: h.type === 'crypto' ? 'Trade · Krypto' : 'Trade · Aktie',
+      badge: sym.slice(0, 5),
+      units: h.units, priceEUR, valueEUR, costEUR, plEUR,
+      plPct: costEUR > 0 ? (plEUR / costEUR) * 100 : 0,
+      changePct: q ? (q.changePct || 0) : 0,
+      targetAlloc: 0, dyn: true
+    });
+  }
   return { total, positions };
+}
+
+// ── SCANNER-TRADES: Paper-Kauf & Schließen ────────────
+// Kauft 5% des Portfoliowerts (gebührenfrei, wie gewünscht).
+// Finanzierung: zuerst Cash, dann anteilig aus allen bestehenden Positionen.
+function buyScanned(sym, type) {
+  const pf = getPortfolio();
+  if (!pf || !isValidPortfolio(pf)) return;
+  const s = scanResults.find(x => x.sym === sym && x.type === type);
+  if (!s || !(s.priceEUR > 0)) { alert('Kein Live-Preis für ' + sym + ' verfügbar.'); return; }
+
+  const val = computePortfolioValue(pf);
+  const amount = val.total * SCAN_BUY_PCT;
+  if (amount < 25) { alert('Portfoliowert zu klein für einen sinnvollen Trade.'); return; }
+
+  // Finanzierung
+  let need = amount;
+  const cash = pf.cashEUR || 0;
+  const fromCash = Math.min(cash, need);
+  pf.cashEUR = cash - fromCash;
+  need -= fromCash;
+  if (need > 0.01) {
+    const invested = val.total - cash;
+    if (invested <= 0) { alert('Nicht genug Kapital.'); return; }
+    const f = Math.max(0, 1 - need / invested);
+    for (const h of Object.values(pf.holdings)) if (h && h.units > 0) h.units *= f;
+  }
+
+  // Kauf: Merge in bestehende Position (auch Kernwerte wie BTC/NVDA) oder neue Trade-Position
+  const units = amount / s.priceEUR;
+  const existing = pf.holdings[sym];
+  if (existing && existing.units > 0 && (!existing.dyn || existing.type === type)) {
+    const totalCost = existing.units * existing.avgCostEUR + amount;
+    existing.units += units;
+    existing.avgCostEUR = totalCost / existing.units;
+    if (existing.dyn) existing.lastPriceEUR = s.priceEUR;
+  } else if (existing && existing.dyn && existing.type !== type) {
+    alert('Symbolkonflikt: ' + sym + ' wird bereits als anderer Anlagetyp gehalten.');
+    return;
+  } else {
+    pf.holdings[sym] = {
+      units, avgCostEUR: s.priceEUR, targetAlloc: 0,
+      dyn: true, type, name: s.name, cg: s.cg || null,
+      lastPriceEUR: s.priceEUR, boughtAt: Date.now()
+    };
+  }
+  savePortfolio(pf);
+  // Preis sofort verfügbar machen
+  currentPrices[sym] = currentPrices[sym] || {
+    price: s.priceUSD || s.priceEUR * currentEURUSD,
+    priceEUR: s.priceEUR, changePct: s.changePct, prevClose: 0
+  };
+  renderPortfolio(pf, true, false);
+  renderScanner();
+}
+
+// Schließt eine Scanner-Position zum aktuellen Kurs → Erlös wird Cash
+function closeDyn(sym) {
+  const pf = getPortfolio();
+  if (!pf) return;
+  const h = pf.holdings[sym];
+  if (!h || !h.dyn) return;
+  const q = currentPrices[sym];
+  const priceEUR = (q && q.priceEUR > 0) ? q.priceEUR
+    : (q && q.price > 0 ? q.price / currentEURUSD : (h.lastPriceEUR || h.avgCostEUR));
+  pf.cashEUR = (pf.cashEUR || 0) + h.units * priceEUR;
+  delete pf.holdings[sym];
+  savePortfolio(pf);
+  renderPortfolio(pf, true, false);
+  renderScanner();
 }
 
 // Generate buy/sell suggestions by comparing current allocation vs target.
@@ -1352,6 +1782,20 @@ function generateTrades(pf, valuation) {
   if (total <= 0) return trades;
 
   for (const p of valuation.positions) {
+    // Scanner-Trades: eigene Exit-Logik (seit EINSTIEG, nicht Allokations-Drift)
+    if (p.dyn) {
+      if (p.plPct >= SCAN_EXIT_TARGET) {
+        trades.push({ sym: p.sym, name: p.name, action: 'SELL', dyn: true, amountEUR: p.valueEUR,
+          reason: `Trade-Ziel erreicht: +${p.plPct.toFixed(1)}% seit Einstieg. Disziplin: Gewinn sichern (Ziel +${SCAN_EXIT_TARGET}%).` });
+      } else if (p.plPct <= SCAN_EXIT_STOP) {
+        trades.push({ sym: p.sym, name: p.name, action: 'SELL', dyn: true, amountEUR: p.valueEUR,
+          reason: `Stop gerissen: ${p.plPct.toFixed(1)}% seit Einstieg. Verlust begrenzen (Limit ${SCAN_EXIT_STOP}%).` });
+      } else {
+        trades.push({ sym: p.sym, name: p.name, action: 'HOLD', dyn: true, amountEUR: 0,
+          reason: `Trade läuft: ${p.plPct>=0?'+':''}${p.plPct.toFixed(1)}% seit Einstieg. Exit bei +${SCAN_EXIT_TARGET}% oder ${SCAN_EXIT_STOP}%.` });
+      }
+      continue;
+    }
     const currentWeight = p.valueEUR / total;
     const targetWeight = p.targetAlloc || 0;
     const driftPct = (currentWeight - targetWeight) * 100;
@@ -1395,20 +1839,38 @@ function generateTrades(pf, valuation) {
   return trades;
 }
 
-// Apply trades: rebalance holdings to target allocation
+// Apply trades: Scanner-Exits ausführen + Kernpositionen rebalancen
 function applyTrades() {
   const pf = getPortfolio();
   if (!pf) return;
+
+  // 1) Scanner-Positionen mit SELL-Vorschlag (Ziel/Stop erreicht) → schließen zu Cash
+  for (const t of pendingTrades) {
+    if (t.action === 'SELL' && t.dyn) {
+      const h = pf.holdings[t.sym];
+      if (h && h.dyn) {
+        const q = currentPrices[t.sym];
+        const pE = (q && q.priceEUR > 0) ? q.priceEUR
+          : (q && q.price > 0 ? q.price / currentEURUSD : (h.lastPriceEUR || h.avgCostEUR));
+        pf.cashEUR = (pf.cashEUR || 0) + h.units * pE;
+        delete pf.holdings[t.sym];
+      }
+    }
+  }
+
+  // 2) Kern rebalancen — über das investierbare Kapital (Gesamt minus laufende Trades).
+  //    Laufende Scanner-Trades bleiben unangetastet; Cash wird in den Kern reinvestiert.
   const valuation = computePortfolioValue(pf);
   const total = valuation.total;
-  // Rebalance every holding to its target allocation at current prices
+  const dynValue = valuation.positions.filter(p => p.dyn).reduce((s, p) => s + p.valueEUR, 0);
+  const investable = Math.max(0, total - dynValue);
   for (const u of UNIVERSE) {
     const h = pf.holdings[u.sym];
     if (!h) continue;
     const livePriceEUR = priceInEUR(u.sym);
     const priceEUR = livePriceEUR > 0 ? livePriceEUR : h.avgCostEUR;
     if (priceEUR <= 0) continue;
-    const targetValueEUR = total * (h.targetAlloc || 0);
+    const targetValueEUR = investable * (h.targetAlloc || 0);
     const newUnits = targetValueEUR / priceEUR;
     // Weighted-average cost basis update for added units; keep basis for reduced
     if (newUnits > h.units) {
@@ -1435,6 +1897,7 @@ function applyTrades() {
 
 function resetPortfolio() {
   if (!confirm('Musterportfolio auf 10.000 € zurücksetzen? Der gespeicherte Verlauf geht verloren.')) return;
+  localStorage.removeItem(DAYTRADE_KEY); // Day-Trading-Tagesstand mit zurücksetzen
   const pf = createInitialPortfolio();
   savePortfolio(pf);
   const live = Object.values(currentPrices).some(p => p && p.price > 0) || Object.keys(twelvePrices).length > 0;
@@ -1488,13 +1951,29 @@ function notifyBrief(brief) {
   } catch {}
 }
 
+// ── DAY-TRADING: Auto-Refresh ─────────────────────────
+// Alle 5 Min stille Aktualisierung — nur Mo–Fr 09:00–22:00 (EU+US-Sessions)
+// und nur wenn die App sichtbar im Vordergrund ist (schont Akku + API-Limits).
+let autoRefreshTimer = null;
+function startAutoRefresh() {
+  if (autoRefreshTimer) return; // läuft schon
+  autoRefreshTimer = setInterval(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const tradingHours = day >= 1 && day <= 5 && mins >= 9 * 60 && mins <= 22 * 60;
+    if (tradingHours && document.visibilityState === 'visible') loadBrief(true);
+  }, DT_AUTOREFRESH_MS);
+}
+
 // ── Main load ─────────────────────────────────────────
-async function loadBrief() {
+// silent=true (Auto-Refresh): kein Loading-Screen, kein Scroll,
+// Fehler werden verschluckt (alte Ansicht bleibt stehen).
+async function loadBrief(silent = false) {
   const btn = document.getElementById('refresh-btn');
   if (btn) btn.disabled = true;
 
-  show('loading');
-  setLoading('Verbindung wird aufgebaut…');
+  if (!silent) { show('loading'); setLoading('Verbindung wird aufgebaut…'); }
   const key = localStorage.getItem(KEY_STORAGE);
   if (!key) { show('key'); return; }
   const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
@@ -1503,14 +1982,18 @@ async function loadBrief() {
 
   try {
     // 1) Fetch ALL real prices — Punkt 6: progressives Feedback
-    setLoading('Lade Live-Kursdaten…');
+    if (!silent) setLoading('Lade Live-Kursdaten…');
     currentPrices = await fetchAllPrices(fhKey || '');
     const priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0)
       || Object.keys(twelvePrices).length > 0;
 
     // 1b) Fetch latest market news (Finnhub) — feeds the analysis
-    setLoading('Lade Marktnachrichten…');
+    if (!silent) setLoading('Lade Marktnachrichten…');
     await fetchMarketNews(fhKey || '');
+
+    // 1c) Chancen-Scanner: Watchlist + Top-Krypto scannen
+    if (!silent) setLoading('Scanne Einzelwerte…');
+    await fetchScanData(fhKey || '');
 
     // 2) Build a LIVE market snapshot to feed Claude's analysis
     const snapshot = buildLiveSnapshot();
@@ -1520,7 +2003,7 @@ async function loadBrief() {
     let brief = cached ? cached.brief : null;
     let freshBrief = false;
     if (!brief) {
-      setLoading('KI-Analyse läuft (Claude)…');
+      if (!silent) setLoading('KI-Analyse läuft (Claude)…');
       brief = await fetchBriefFromClaude(key, snapshot, currentNews);
       setCache(brief, snapshot, currentNews);
       freshBrief = true;
@@ -1530,7 +2013,7 @@ async function loadBrief() {
     // Punkt 5: Sentiment-Score an reale Bewegungen koppeln
     brief.sentimentScore = calibrateSentiment(brief.sentimentScore, snapshot);
 
-    setLoading('Portfolio wird bewertet…');
+    if (!silent) setLoading('Portfolio wird bewertet…');
     // 4) Portfolio — bestehende lokale Speicherung weiterverwenden.
     let pf = getPortfolio();
     let portfolioIsNew = false;
@@ -1549,6 +2032,7 @@ async function loadBrief() {
     // 5) Render — live data only
     renderBrief(brief, priceSourceLive, snapshot);
     renderPortfolio(pf, priceSourceLive, portfolioIsNew);
+    renderScanner();
     document.getElementById('offline-pill').style.display = 'none';
     updateNotifyBtn();
 
@@ -1556,9 +2040,12 @@ async function loadBrief() {
     if (freshBrief) notifyBrief(brief);
 
     show('dash');
-    window.scrollTo(0, 0);
+    if (!silent) window.scrollTo(0, 0);
+    startAutoRefresh();
 
   } catch (err) {
+    // Silent-Refresh: Fehler ignorieren, alte Ansicht bleibt stehen
+    if (silent) { if (btn) btn.disabled = false; return; }
     // Punkt 8: Offline-Fallback — letzten erfolgreichen Brief anzeigen statt Error-Screen
     const stale = getCached(true);
     if (stale && stale.brief && stale.snapshot) {
@@ -1568,6 +2055,7 @@ async function loadBrief() {
         renderBrief(stale.brief, false, stale.snapshot);
         const pf = getPortfolio();
         if (pf && isValidPortfolio(pf)) renderPortfolio(pf, false, false);
+        renderScanner();
         document.getElementById('offline-pill').style.display = 'block';
         updateNotifyBtn();
         show('dash');
@@ -1651,6 +2139,13 @@ function snapshotToText(snap) {
   if (snap.crypto.length) lines.push('Krypto: ' + snap.crypto.map(fmt).join(' | '));
   if (snap.macro.length)  lines.push('Rohstoffe/FX/Volatilität: ' + snap.macro.map(fmt).join(' | ') + (snap.macro.some(m=>m.name==='Volatilität') ? ' [Hinweis: steigende Volatilität = Risk-off]' : ''));
   if (snap.stocks.length) lines.push('Einzelaktien: ' + snap.stocks.map(fmt).join(' | '));
+  // Scanner-Top-Mover: gibt Claude Sicht auf ALLE gescannten Einzelwerte
+  if (scanResults.length) {
+    const sorted = [...scanResults].sort((a, b) => b.changePct - a.changePct);
+    const fmtS = s => `${s.sym} ${s.changePct>=0?'+':''}${s.changePct.toFixed(1)}%`;
+    lines.push('Scanner-Gewinner (aus ' + scanResults.length + ' Werten): ' + sorted.slice(0, 5).map(fmtS).join(' | '));
+    lines.push('Scanner-Verlierer: ' + sorted.slice(-5).reverse().map(fmtS).join(' | '));
+  }
   return lines.join('\n');
 }
 
@@ -1682,7 +2177,8 @@ Erstelle auf Basis DIESER Daten${newsText ? ' und Schlagzeilen' : ''} eine Analy
   ],
   "risks": [<3-4 konkrete Risiken, abgeleitet aus den Daten${newsText ? '/Schlagzeilen' : ''} oben>],
   "opportunities": [<3-4 konkrete Chancen, abgeleitet aus den Daten${newsText ? '/Schlagzeilen' : ''} oben>],
-  "recommendation": "<3-5 Sätze auf Deutsch. Beziehe dich KONKRET auf die Live-Zahlen${newsText ? ' und aktuellen Ereignisse' : ''} oben. **Fettschrift** für Schlüsselbegriffe. Schließe mit Hinweis, dass dies keine Anlageberatung ist.>"
+  "recommendation": "<3-5 Sätze auf Deutsch. Beziehe dich KONKRET auf die Live-Zahlen${newsText ? ' und aktuellen Ereignisse' : ''} oben. **Fettschrift** für Schlüsselbegriffe. Schließe mit Hinweis, dass dies keine Anlageberatung ist.>",
+  "dayTradingNote": "<2-3 Sätze auf Deutsch zur HEUTIGEN Intraday-Lage: Volatilität, Momentum, Risk-on/Risk-off — abgeleitet aus den Daten oben. NIEMALS Gewinne versprechen oder konkrete Trades befehlen; nur Marktumfeld einordnen (z.B. 'trendiges Umfeld' vs. 'choppy — Vorsicht bei Ausbrüchen').>"
 }
 
 Wichtig: sentimentScore muss zu den realen Bewegungen passen (viele Minuszeichen = niedriger Score, viele Pluszeichen = hoher Score).`;
@@ -1884,6 +2380,10 @@ function renderBrief(b, priceSourceLive, snapshot) {
   document.getElementById('opps-cloud').innerHTML = (b.opportunities || []).map(o => `<span class="tag tag-pos">${esc(o)}</span>`).join('');
   document.getElementById('rec-text').innerHTML = b.recommendation || '—';
 
+  // Day-Trading-Einschätzung von Claude (textContent = XSS-sicher)
+  const dtNoteEl = document.getElementById('dt-note');
+  if (dtNoteEl) dtNoteEl.textContent = b.dayTradingNote || '';
+
   // Analysis summaries
   setSummary('sum-macro', (snapshot.macro||[]).slice(0,2).map(m=>esc(m.name)).join(' · ') + (snapshot.macro && snapshot.macro.length>2 ? ` · +${snapshot.macro.length-2} mehr` : ''));
   setSummary('sum-topics', `${(b.topTopics||[]).length} Themen · ${(b.topTopics||[]).slice(0,2).map(t=>esc(t.text)).join(', ')}…`);
@@ -1909,7 +2409,7 @@ function renderBrief(b, priceSourceLive, snapshot) {
     }
   }
 
-  document.getElementById('footer-updated').textContent = 'Aktualisiert: ' + new Date().toLocaleString('de-DE', { dateStyle:'short', timeStyle:'short' });
+  document.getElementById('footer-updated').textContent = 'Aktualisiert: ' + new Date().toLocaleString('de-DE', { dateStyle:'short', timeStyle:'short' }) + ' · Auto-Refresh alle 5 Min (Mo–Fr 9–22 Uhr)';
 
   const btn = document.getElementById('refresh-btn');
   if (btn) { btn._manualRefresh = false; btn.onclick = () => { btn._manualRefresh = true; loadBrief(); }; }
@@ -1919,8 +2419,205 @@ function renderBrief(b, priceSourceLive, snapshot) {
 const fmtEUR = v => v.toLocaleString('de-DE', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
 const fmtEUR2 = v => v.toLocaleString('de-DE', { style:'currency', currency:'EUR', maximumFractionDigits:2 });
 
+// ══════════ DAY-TRADING ══════════
+
+// Tages-State: Startwert beim ersten Laden des Kalendertags einfrieren,
+// Intraday-Punkte sammeln, Ziel/Stop-Treffer für den Tag "einrasten" (latch).
+function updateDayTrade(totalNow) {
+  const today = new Date().toDateString();
+  let dt = null;
+  try { dt = JSON.parse(localStorage.getItem(DAYTRADE_KEY) || 'null'); } catch {}
+  if (!dt || dt.date !== today || !(dt.startValueEUR > 0)) {
+    dt = { date: today, startValueEUR: totalNow, hitTarget: false, hitStop: false,
+           points: [{ ts: Date.now(), v: totalNow }] };
+  } else {
+    const last = dt.points[dt.points.length - 1];
+    if (!last || Date.now() - last.ts > 2 * 60 * 1000) {
+      dt.points.push({ ts: Date.now(), v: totalNow });
+      if (dt.points.length > 150) dt.points = dt.points.slice(-150);
+    } else if (last) {
+      last.v = totalNow; // jüngsten Punkt aktualisieren
+    }
+  }
+  const plPct = dt.startValueEUR > 0 ? ((totalNow - dt.startValueEUR) / dt.startValueEUR) * 100 : 0;
+  // Latch: einmal erreicht = für heute fixiert (Disziplin!)
+  if (plPct >= DT_TARGET_PCT) dt.hitTarget = true;
+  if (plPct <= DT_STOP_PCT) dt.hitStop = true;
+  try { localStorage.setItem(DAYTRADE_KEY, JSON.stringify(dt)); } catch {}
+  return { ...dt, plPct, plEUR: totalNow - dt.startValueEUR };
+}
+
+// Intraday-Signal-Engine: einfache Momentum-Klassifikation aus Tagesänderungen
+// + Volatilitätskontext (VIXY). Signale sind HINWEISE, keine Kaufbefehle.
+function buildIntradaySignals(positions) {
+  const sigs = [];
+  // Marktweites Volatilitätssignal zuerst
+  if (vixQuote && Math.abs(vixQuote.changePct) >= 3) {
+    if (vixQuote.changePct > 0) {
+      sigs.push({ name: 'Gesamtmarkt', chg: vixQuote.changePct, cls: 'neg', label: 'RISK-OFF',
+        text: `Volatilität (VIXY) +${vixQuote.changePct.toFixed(1)}% — Positionsgrößen halbieren, engere Stops, keine neuen Longs gegen den Trend.` });
+    } else {
+      sigs.push({ name: 'Gesamtmarkt', chg: vixQuote.changePct, cls: 'pos', label: 'RISK-ON',
+        text: `Volatilität (VIXY) ${vixQuote.changePct.toFixed(1)}% — beruhigtes Umfeld, Trendfolge-Setups bevorzugen.` });
+    }
+  }
+  for (const p of positions) {
+    const c = p.changePct || 0;
+    let s;
+    if (c >= 2.5)      s = { cls:'pos', label:'MOMENTUM ↑↑', text:'Starkes Aufwärtsmomentum. Trader-Regel: Teilgewinne sichern, Rest mit Trailing-Stop laufen lassen.' };
+    else if (c >= 1)   s = { cls:'pos', label:'MOMENTUM ↑',  text:'Positives Momentum. Bestehende Position halten, Stop nachziehen.' };
+    else if (c <= -2.5) s = { cls:'neg', label:'MOMENTUM ↓↓', text:'Starker Abgabedruck. Kein fallendes Messer fangen — auf Stabilisierung warten.' };
+    else if (c <= -1)  s = { cls:'neg', label:'MOMENTUM ↓',  text:'Negatives Momentum. Verlustlimit im Blick behalten.' };
+    else               s = { cls:'neu', label:'SEITWÄRTS',   text:'Kein klares Signal. Geduld ist eine Position — nicht erzwingen.' };
+    sigs.push({ name: p.name, chg: c, ...s });
+  }
+  return sigs;
+}
+
+// Rendert Cockpit: P&L, Ziel/Stop-Balken, Sparkline, Disziplin-Status, Signale
+function renderDayTrade(dt, positions) {
+  const plEl = document.getElementById('dt-pl');
+  if (!plEl) return;
+  const sign = dt.plEUR >= 0 ? '+' : '';
+  const cls = dt.plEUR >= 0 ? 'pos' : 'neg';
+  plEl.innerHTML = `<span class="${cls}">${sign}${fmtEUR2(dt.plEUR)}</span>`;
+  document.getElementById('dt-pl-sub').innerHTML =
+    `<span class="${cls}">${sign}${dt.plPct.toFixed(2)}%</span> <span style="color:var(--muted)">· Basis heute: ${fmtEUR2(dt.startValueEUR)}</span>`;
+
+  // Marker auf Ziel/Stop-Skala: -1,5% → 0% Position, 0% → 33,3%, +3% → 100%
+  const range = DT_TARGET_PCT - DT_STOP_PCT; // 4,5 PP
+  const posPct = Math.max(0, Math.min(100, ((dt.plPct - DT_STOP_PCT) / range) * 100));
+  const marker = document.getElementById('dt-marker');
+  if (marker) {
+    marker.style.left = posPct + '%';
+    marker.style.borderColor = dt.hitStop ? 'var(--red)' : (dt.hitTarget ? 'var(--green)' : 'var(--gold)');
+  }
+
+  // Status + Disziplin-Box (Latch: bleibt für den Rest des Tages stehen)
+  const statusEl = document.getElementById('dt-status');
+  const discEl = document.getElementById('dt-discipline');
+  if (dt.hitStop) {
+    statusEl.innerHTML = '<span class="neg">🛑 STOP</span>';
+    discEl.className = 'dt-discipline stop';
+    discEl.textContent = `Tagesverlustlimit ${DT_STOP_PCT.toLocaleString('de-DE')}% erreicht. Disziplin-Regel: HEUTE KEINEN weiteren Trade. Verluste begrenzen ist der Job — morgen ist ein neuer Tag.`;
+  } else if (dt.hitTarget) {
+    statusEl.innerHTML = '<span class="pos">🎯 ZIEL ERREICHT</span>';
+    discEl.className = 'dt-discipline win';
+    discEl.textContent = `Tagesziel +${DT_TARGET_PCT.toLocaleString('de-DE')}% erreicht. Disziplin-Regel: Gewinne sichern, Bildschirm aus. Weiterhandeln nach Zielerreichung ist die häufigste Ursache, Tagesgewinne wieder zu verlieren.`;
+  } else {
+    const remain = DT_TARGET_PCT - dt.plPct;
+    const buffer = dt.plPct - DT_STOP_PCT;
+    statusEl.innerHTML = '<span style="color:var(--gold)">● AKTIV</span>';
+    discEl.className = 'dt-discipline run';
+    discEl.textContent = `Noch ${remain.toFixed(2)} PP bis zum Tagesziel · ${buffer.toFixed(2)} PP Puffer bis zum Verlustlimit. Regel: Ziel ODER Stop → Handelsschluss. Kein Nachjustieren der Limits im laufenden Tag.`;
+  }
+
+  // Intraday-Sparkline (heutiger Verlauf)
+  const sparkEl = document.getElementById('dt-spark');
+  if (sparkEl) {
+    if (dt.points && dt.points.length >= 2) {
+      const vals = dt.points.map(p => p.v);
+      let lo = Math.min(...vals), hi = Math.max(...vals);
+      if (lo === hi) { lo -= 1; hi += 1; }
+      const W = 300, H = 36;
+      const x = i => (i / (vals.length - 1)) * W;
+      const y = v => 3 + (1 - (v - lo) / (hi - lo)) * (H - 6);
+      const path = vals.map((v, i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      const yStart = y(dt.startValueEUR);
+      const col = dt.plEUR >= 0 ? 'var(--green)' : 'var(--red)';
+      sparkEl.innerHTML = `
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+          <line x1="0" y1="${yStart.toFixed(1)}" x2="${W}" y2="${yStart.toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,3"/>
+          <path d="${path}" fill="none" stroke="${col}" stroke-width="1.5"/>
+        </svg>`;
+    } else {
+      sparkEl.innerHTML = '';
+    }
+  }
+
+  // Signale
+  const sigs = buildIntradaySignals(positions);
+  const listEl = document.getElementById('signals-list');
+  if (listEl) {
+    listEl.innerHTML = sigs.map(s => {
+      const cSign = s.chg >= 0 ? '+' : '';
+      const cCls = s.chg >= 0 ? 'pos' : 'neg';
+      return `
+      <div class="sig-row">
+        <div class="sig-badge ${s.cls}">${esc(s.label)}</div>
+        <div class="sig-body">
+          <div class="sig-name">${esc(s.name)}</div>
+          <div class="sig-text">${esc(s.text)}</div>
+        </div>
+        <div class="sig-chg ${cCls}">${cSign}${s.chg.toFixed(1)}%</div>
+      </div>`;
+    }).join('');
+  }
+  const nUp = sigs.filter(s=>s.cls==='pos').length, nDn = sigs.filter(s=>s.cls==='neg').length;
+  setSummary('sum-signals', `<span class="pos">${nUp} bullish</span> · <span class="neg">${nDn} bearish</span> · ${sigs.length - nUp - nDn} neutral`);
+}
+
+// ══════════ /DAY-TRADING ══════════
+
+// ── CHANCEN-SCANNER: Rendering ────────────────────────
+// Zeigt Top-5-Gewinner und Top-5-Verlierer des Tages aus allen gescannten
+// Werten (US-Watchlist + Top-30-Krypto). Kauf = Paper-Trade über 5% des Depots.
+function renderScanner() {
+  const el = document.getElementById('scanner-list');
+  if (!el) return;
+  if (!scanResults.length) {
+    el.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Scan-Daten.<br>Finnhub Key nötig für Aktien-Scan.</div>`;
+    setSummary('sum-scanner', 'Keine Daten');
+    return;
+  }
+  const pf = getPortfolio();
+  const held = new Set();
+  if (pf && pf.holdings) for (const [sym, h] of Object.entries(pf.holdings)) if (h && h.units > 0) held.add(sym);
+
+  const sorted = [...scanResults].sort((a, b) => b.changePct - a.changePct);
+  const gainers = sorted.slice(0, 5);
+  const losers = sorted.slice(-5).reverse();
+
+  const row = (s, isGainer) => {
+    const cSign = s.changePct >= 0 ? '+' : '';
+    const cCls = s.changePct >= 0 ? 'pos' : 'neg';
+    const typeLabel = s.type === 'crypto' ? 'Krypto' : 'Aktie';
+    const note = isGainer
+      ? (s.changePct >= 4 ? 'Starkes Momentum — spät einsteigen ist riskant (Chase-Gefahr).' : 'Aufwärtsmomentum heute.')
+      : (s.changePct <= -4 ? 'Starker Abverkauf — fallendes Messer, nur für Antizykliker.' : 'Schwäche heute — mögliche Übertreibung.');
+    const btn = held.has(s.sym)
+      ? `<span class="scan-held">IM DEPOT</span>`
+      : `<button class="scan-buy" onclick="buyScanned('${esc(s.sym)}','${s.type}')">＋ 5%</button>`;
+    return `
+    <div class="sig-row">
+      <div class="sig-body">
+        <div class="sig-name">${esc(s.name)} <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">${esc(s.sym)} · ${typeLabel}</span></div>
+        <div class="sig-text">${esc(note)} Kurs: ${s.priceEUR.toLocaleString('de-DE',{maximumFractionDigits: s.priceEUR<10?4:2})} €</div>
+      </div>
+      <div class="sig-chg ${cCls}">${cSign}${s.changePct.toFixed(1)}%</div>
+      ${btn}
+    </div>`;
+  };
+
+  el.innerHTML =
+    `<div class="scan-section pos">▲ Top-Gewinner heute</div>` +
+    gainers.map(s => row(s, true)).join('') +
+    `<div class="scan-section neg">▼ Top-Verlierer heute</div>` +
+    losers.map(s => row(s, false)).join('') +
+    `<div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);line-height:1.6">Basis: ${scanResults.filter(s=>s.type==='stock').length} US-Aktien (Watchlist) + ${scanResults.filter(s=>s.type==='crypto').length} Krypto (Top-Marktkap.) · Kauf = 5% Depotwert, gebührenfrei simuliert · Exit-Vorschlag bei +${SCAN_EXIT_TARGET}% / ${SCAN_EXIT_STOP}%</div>`;
+
+  const bestG = gainers[0], worstL = losers[0];
+  setSummary('sum-scanner',
+    `${scanResults.length} Werte · Top: ${esc(bestG.sym)} <span class="pos">+${bestG.changePct.toFixed(1)}%</span> · Flop: ${esc(worstL.sym)} <span class="neg">${worstL.changePct.toFixed(1)}%</span>`);
+}
+
+
+
 function renderPortfolio(pf, priceSourceLive, portfolioIsNew) {
   const val = computePortfolioValue(pf);
+  // Day-Trading-Cockpit: Tages-P&L aktualisieren und rendern
+  const dt = updateDayTrade(val.total);
+  renderDayTrade(dt, val.positions);
   const total = val.total;
   const startCap = pf.startCapitalEUR || 10000;
   const totalPL = total - startCap;
@@ -1955,9 +2652,10 @@ function renderPortfolio(pf, priceSourceLive, portfolioIsNew) {
   else { srcBadge.textContent = '● SCHÄTZUNG'; srcBadge.className = 'src-badge stale'; }
   srcBadge.style.marginLeft = 'auto';
 
-  // Holdings
+  // Holdings (Scanner-Trades mit Schließen-Button; Cash als eigene Zeile)
   document.getElementById('holdings-list').innerHTML = val.positions.map(p => {
     const plSign = p.plEUR >= 0 ? '+' : '';
+    const closeBtn = p.dyn ? `<button class="hold-close" onclick="closeDyn('${esc(p.sym)}')">×</button>` : '';
     return `
     <div class="hold-row">
       <div class="hold-badge">${esc(p.badge)}</div>
@@ -1969,8 +2667,19 @@ function renderPortfolio(pf, priceSourceLive, portfolioIsNew) {
         <div class="hold-val">${fmtEUR2(p.valueEUR)}</div>
         <div class="hold-chg ${p.plEUR>=0?'pos':'neg'}">${plSign}${p.plPct.toFixed(1)}%</div>
       </div>
+      ${closeBtn}
     </div>`;
-  }).join('');
+  }).join('') + ((pf.cashEUR || 0) > 0.5 ? `
+    <div class="hold-row">
+      <div class="hold-badge">CASH</div>
+      <div class="hold-mid">
+        <div class="hold-name">Barbestand</div>
+        <div class="hold-meta">aus geschlossenen Trades · wird beim Rebalancing reinvestiert</div>
+      </div>
+      <div class="hold-right">
+        <div class="hold-val">${fmtEUR2(pf.cashEUR)}</div>
+      </div>
+    </div>` : '');
   setSummary('sum-holdings', `${val.positions.length} Positionen · ${fmtEUR(total)}`);
 
   // Trades
