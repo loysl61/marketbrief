@@ -488,6 +488,54 @@ body::after {
 }
 .toggle-all:active { opacity: 0.6; }
 
+/* ── LIGHT THEME (Punkt 15) ── */
+body.light {
+  --bg:   #f4f2ec;
+  --bg1:  #ffffff;
+  --bg2:  #efece4;
+  --bg3:  #e6e2d8;
+  --border: rgba(0,0,0,0.08);
+  --gold:  #a07c3a;
+  --green: #1e8f66;
+  --red:   #c23434;
+  --yellow:#a68417;
+  --text:  #3a3d48;
+  --muted: #8a8fa5;
+  --white: #14161d;
+}
+body.light::after { opacity: 0.03; }
+body.light .topbar { background: rgba(244,242,236,0.9); }
+body.light #install-banner { box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
+
+/* Chart-Achsenbeschriftung (Punkt 13) */
+.chart-axis {
+  display: flex; justify-content: space-between;
+  margin-top: 4px;
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: var(--muted); letter-spacing: 0.5px;
+}
+
+/* Benachrichtigungs-Button (Punkt 14) */
+.notify-btn {
+  display: block; width: 100%;
+  background: none; border: 1px dashed var(--border);
+  border-radius: 12px; padding: 11px;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--muted); letter-spacing: 0.5px;
+  cursor: pointer; -webkit-appearance: none;
+  margin-bottom: 10px;
+}
+.notify-btn.on { color: var(--green); border-color: rgba(78,203,160,0.35); border-style: solid; }
+
+/* Offline-Hinweis (Punkt 8) */
+.offline-pill {
+  display: none;
+  background: rgba(232,197,71,0.08); border: 1px solid rgba(232,197,71,0.3);
+  border-radius: 12px; padding: 11px 14px;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--yellow); line-height: 1.5;
+}
+
 </style>
 </head>
 <body>
@@ -521,7 +569,7 @@ body::after {
 <div id="loading-screen">
   <div class="spinner-ring"></div>
   <div class="loading-label">Analyse läuft</div>
-  <div class="loading-sub">Märkte werden ausgewertet</div>
+  <div class="loading-sub" id="loading-sub">Märkte werden ausgewertet</div>
 </div>
 
 <!-- ERROR SCREEN -->
@@ -545,6 +593,7 @@ body::after {
       </div>
       <div class="topbar-right">
         <div id="hdr-sentiment">—</div>
+        <button class="refresh-btn" id="theme-btn" onclick="toggleTheme()" title="Hell/Dunkel">◐</button>
         <button class="refresh-btn" id="refresh-btn">↺</button>
       </div>
     </div>
@@ -560,6 +609,11 @@ body::after {
     <!-- Alert -->
     <div class="alert" id="alert-banner" style="display:none">
       <span>⚠</span><span id="alert-text"></span>
+    </div>
+
+    <!-- Offline-Hinweis (Punkt 8) -->
+    <div class="offline-pill" id="offline-pill">
+      ⚠ Offline — angezeigt werden die zuletzt geladenen Daten.
     </div>
 
     <!-- Sentiment (always visible) -->
@@ -798,6 +852,7 @@ body::after {
     <!-- Footer -->
     <div>
       <div class="sep"></div>
+      <button class="notify-btn" id="notify-btn" onclick="toggleNotify()">🔔 Benachrichtigungen aktivieren</button>
       <div class="footer-updated" id="footer-updated"></div>
       <div class="footer-legal">KEIN ANLAGEBERATUNG · MARKET BRIEF</div>
     </div>
@@ -830,7 +885,26 @@ const TWELVEDATA_KEY_STORAGE = 'mb_twelvedata_key';
 const CACHE_KEY    = 'mb_cached_brief';
 const CACHE_TS_KEY = 'mb_cache_ts';
 const PORTFOLIO_KEY = 'mb_portfolio';
-const CACHE_TTL_MS = 1 * 60 * 60 * 1000; // 1 hour — Daten sollen aktuell sein
+const EURUSD_KEY   = 'mb_eurusd';        // Punkt 4: letzter bekannter EUR/USD-Kurs
+const TD_CACHE_KEY = 'mb_td_cache';      // Punkt 11: 60s-Cache gegen Twelve-Data-Rate-Limit
+const TD_CACHE_TS  = 'mb_td_cache_ts';
+const NOTIFY_KEY   = 'mb_notify';        // Punkt 14
+const THEME_KEY    = 'mb_theme';         // Punkt 15
+const HISTORY_MAX  = 90;                 // Punkt 9: EIN einheitliches History-Limit
+
+// Punkt 7: Cache-TTL abhängig von Marktzeiten (lokale Zeit = Europe/Berlin beim Nutzer)
+// US-Handel Mo–Fr ca. 15:30–22:00 MEZ → kurze TTL; Wochenende/Nacht → lange TTL.
+function computeCacheTTL() {
+  const now = new Date();
+  const day = now.getDay();            // 0=So, 6=Sa
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (day === 0 || day === 6) return 6 * 60 * 60 * 1000;          // Wochenende: 6h
+  const usOpen = mins >= (15*60+30) && mins <= (22*60);           // US-Session
+  const euOpen = mins >= (9*60) && mins < (17*60+30);             // EU-Session
+  if (usOpen) return 15 * 60 * 1000;                              // 15 Min
+  if (euOpen) return 30 * 60 * 1000;                              // 30 Min
+  return 2 * 60 * 60 * 1000;                                      // Nacht: 2h
+}
 
 // Portfolio universe — real tradeable symbols via Finnhub
 // stocks/ETFs use plain symbols; crypto uses BINANCE: prefix
@@ -862,9 +936,15 @@ const TWELVE_SYMBOLS = [
   { key: 'Europa',   td: 'VGK',     label: 'via VGK ETF',    group: 'eu',    fx: 'usd' },
   { key: 'Schweiz',  td: 'EWL',     label: 'via EWL ETF',    group: 'swiss', fx: 'usd' },
   { key: 'Gold',     td: 'XAU/USD', label: 'Troy Oz',        group: 'macro', fx: 'usd' },
+  { key: 'Öl (WTI)', td: 'WTI/USD', label: 'Barrel',         group: 'macro', fx: 'usd' },  // Punkt 11
   { key: 'EUR/USD',  td: 'EUR/USD', label: 'Devisen',        group: 'macro', fx: 'none' },
 ];
 let twelvePrices = {}; // key -> {price, changePct}
+
+// Punkt 12: VIX-Proxy über VIXY-ETF (Finnhub Free-Tier).
+// Absoluter Preis ist wenig aussagekräftig — die TAGESÄNDERUNG ist das Angstsignal.
+const VIX_PROXY = { key: 'Volatilität', finnhub: 'VIXY', sub: 'via VIXY ETF' };
+let vixQuote = null; // {price, changePct}
 
 // Swiss market — wird über EWL-ETF in TWELVE_SYMBOLS abgedeckt (group:'swiss').
 // Separate Einzelwerte (NESN:SIX etc.) sind im Free-Tier nicht verfügbar und
@@ -901,8 +981,46 @@ window.addEventListener('unhandledrejection', (e) => {
 
 // ── State (filled each load) ──────────────────────────
 let currentPrices = {};   // sym -> {price, changePct, prevClose}
-let currentEURUSD = 1.08; // fallback
+// Punkt 4: EUR/USD-Fallback = letzter bekannter Live-Kurs statt hartkodiert
+let currentEURUSD = parseFloat(localStorage.getItem(EURUSD_KEY)) || 1.08;
 let pendingTrades = [];   // trade suggestions for this session
+let isOfflineView = false; // Punkt 8
+
+function persistEURUSD(rate) {
+  if (rate > 0.5 && rate < 2.5) { // Plausibilitätsfenster
+    currentEURUSD = rate;
+    try { localStorage.setItem(EURUSD_KEY, String(rate)); } catch {}
+  }
+}
+
+// ── Punkt 15: Theme ───────────────────────────────────
+function applyTheme(t) {
+  document.body.classList.toggle('light', t === 'light');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = (t === 'light') ? '#f4f2ec' : '#08090c';
+}
+function toggleTheme() {
+  const next = document.body.classList.contains('light') ? 'dark' : 'light';
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
+  applyTheme(next);
+}
+// Initial: gespeicherte Wahl > System-Präferenz > dunkel
+(function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved) { applyTheme(saved); return; }
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) applyTheme('light');
+})();
+
+// ── Punkt 8: Service Worker (optional, scheitert leise wenn sw.js fehlt) ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ── Punkt 6: progressiver Lade-Text ───────────────────
+function setLoading(text) {
+  const el = document.getElementById('loading-sub');
+  if (el) el.textContent = text;
+}
 
 // ── Init ──────────────────────────────────────────────
 window.addEventListener('load', () => {
@@ -939,17 +1057,24 @@ function resetKey() {
 }
 
 // ── Cache helpers ─────────────────────────────────────
-function getCached() {
+// Punkt 7+8: Cache speichert Brief UND Snapshot UND News,
+// TTL richtet sich nach Marktzeiten; allowStale=true für Offline-Fallback.
+function getCached(allowStale = false) {
   try {
     const ts = parseInt(localStorage.getItem(CACHE_TS_KEY) || '0');
-    if (Date.now() - ts > CACHE_TTL_MS) return null;
+    if (!allowStale && Date.now() - ts > computeCacheTTL()) return null;
     const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    // Rückwärtskompatibel: altes Format war der Brief direkt (hat sentimentScore)
+    if (obj && obj.brief) return obj;
+    if (obj && obj.sentimentScore !== undefined) return { brief: obj, snapshot: null, news: [] };
+    return null;
   } catch { return null; }
 }
-function setCache(data) {
+function setCache(brief, snapshot, news) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ brief, snapshot, news }));
     localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
   } catch {}
 }
@@ -967,51 +1092,67 @@ async function fetchQuote(finnhubSym, fhKey) {
 async function fetchAllPrices(fhKey) {
   const prices = {};
 
-  // 1) STOCKS/ETFs via Finnhub (works on free tier)
-  for (const u of UNIVERSE.filter(x => x.source === 'finnhub')) {
-    try {
-      const q = await fetchQuote(u.finnhub, fhKey);
-      prices[u.sym] = q;
-    } catch (e) {
-      prices[u.sym] = null;
-    }
-  }
-
-  // 1b) INDEX PROXIES (SPY/QQQ/DIA) for live US-market card
+  // 1) FINNHUB — Punkt 1: ALLE Quotes PARALLEL statt seriell.
+  //    Aktien/ETFs + Index-Proxies + VIXY (Punkt 12) in einem Rutsch.
   indexPrices = {};
+  vixQuote = null;
   if (fhKey) {
-    for (const ix of INDEX_PROXIES) {
-      try {
-        const q = await fetchQuote(ix.finnhub, fhKey);
-        if (q && q.price > 0) indexPrices[ix.key] = { price: q.price, changePct: q.changePct };
-      } catch (e) { /* keep Claude estimate */ }
+    const fhStocks = UNIVERSE.filter(x => x.source === 'finnhub');
+    const jobs = [
+      ...fhStocks.map(u => fetchQuote(u.finnhub, fhKey).then(q => ({ kind: 'stock', sym: u.sym, q }))),
+      ...INDEX_PROXIES.map(ix => fetchQuote(ix.finnhub, fhKey).then(q => ({ kind: 'index', key: ix.key, q }))),
+      fetchQuote(VIX_PROXY.finnhub, fhKey).then(q => ({ kind: 'vix', q }))
+    ];
+    const results = await Promise.allSettled(jobs);
+    for (const r of results) {
+      if (r.status !== 'fulfilled') continue;
+      const { kind, q } = r.value;
+      if (!q || !(q.price > 0)) continue;
+      if (kind === 'stock') prices[r.value.sym] = q;
+      else if (kind === 'index') indexPrices[r.value.key] = { price: q.price, changePct: q.changePct };
+      else if (kind === 'vix') vixQuote = { price: q.price, changePct: q.changePct };
     }
+    // Fehlende Stock-Symbole explizit auf null setzen
+    for (const u of fhStocks) if (!(u.sym in prices)) prices[u.sym] = null;
+  } else {
+    for (const u of UNIVERSE.filter(x => x.source === 'finnhub')) prices[u.sym] = null;
   }
 
-  // 1c) TWELVE DATA: real DAX, EURO STOXX, Gold, Oil, EUR/USD + Swiss market
+  // 1c) TWELVE DATA — Punkt 11: 8 Symbole = exakt am 8-Credit-Limit.
+  //     Deshalb 60s-Micro-Cache: verhindert Rate-Limit-Bruch bei schnellem Doppel-Refresh.
   twelvePrices = {};
   swissPrices = {};
   const tdKey = localStorage.getItem(TWELVEDATA_KEY_STORAGE);
   if (tdKey) {
-    // Batch request: all symbols (Europe/macro + Swiss) in one call
+    let d = null;
     try {
-      const allTd = [...TWELVE_SYMBOLS, ...SWISS_SYMBOLS];
-      const syms = allTd.map(s => s.td).join(',');
-      const url = `${TWELVEDATA_BASE}/quote?symbol=${encodeURIComponent(syms)}&apikey=${tdKey}`;
-      const r = await fetch(url);
-      if (r.ok) {
-        const d = await r.json();
-        // Europe / macro
+      const cacheTs = parseInt(localStorage.getItem(TD_CACHE_TS) || '0');
+      if (Date.now() - cacheTs < 60 * 1000) {
+        d = JSON.parse(localStorage.getItem(TD_CACHE_KEY) || 'null');
+      }
+      if (!d) {
+        const allTd = [...TWELVE_SYMBOLS, ...SWISS_SYMBOLS];
+        const syms = allTd.map(s => s.td).join(',');
+        const url = `${TWELVEDATA_BASE}/quote?symbol=${encodeURIComponent(syms)}&apikey=${tdKey}`;
+        const r = await fetch(url);
+        if (r.ok) {
+          d = await r.json();
+          try {
+            localStorage.setItem(TD_CACHE_KEY, JSON.stringify(d));
+            localStorage.setItem(TD_CACHE_TS, String(Date.now()));
+          } catch {}
+        }
+      }
+      if (d) {
         for (const s of TWELVE_SYMBOLS) {
           const row = d[s.td] || (d.symbol === s.td ? d : null);
           if (row && row.close && !row.code) {
             const price = parseFloat(row.close);
             const chg = parseFloat(row.percent_change) || 0;
             if (price > 0) twelvePrices[s.key] = { price, changePct: chg };
-            if (s.key === 'EUR/USD' && price > 0) currentEURUSD = price;
+            if (s.key === 'EUR/USD' && price > 0) persistEURUSD(price); // Punkt 4
           }
         }
-        // Swiss market
         for (const s of SWISS_SYMBOLS) {
           const row = d[s.td] || (d.symbol === s.td ? d : null);
           if (row && row.close && !row.code) {
@@ -1021,7 +1162,7 @@ async function fetchAllPrices(fhKey) {
           }
         }
       }
-    } catch (e) { /* keep Claude estimates */ }
+    } catch (e) { /* keep fallbacks */ }
   }
 
   // 2) CRYPTO via CoinGecko (free, no key, gives USD + EUR + 24h change)
@@ -1040,9 +1181,9 @@ async function fetchAllPrices(fhKey) {
             prevClose: 0,
             changePct: row.usd_24h_change || 0
           };
-          // Derive EUR/USD from BTC's dual quote (most reliable live rate)
+          // Derive EUR/USD from BTC's dual quote — Punkt 4: persistieren
           if (row.usd && row.eur && u.sym === 'BTC') {
-            currentEURUSD = row.usd / row.eur;
+            persistEURUSD(row.usd / row.eur);
           }
         } else {
           prices[u.sym] = null;
@@ -1055,8 +1196,6 @@ async function fetchAllPrices(fhKey) {
     for (const u of UNIVERSE.filter(x => x.source === 'coingecko')) prices[u.sym] = null;
   }
 
-  // 3) EUR/USD rate: try CoinGecko's tether (USDT≈USD) priced in EUR as cross-check.
-  //    Already derived from BTC above; if that failed, keep fallback.
   return prices;
 }
 
@@ -1175,7 +1314,7 @@ function recordHistoryPoint(pf) {
   } else {
     pf.history.push({ ts: Date.now(), valueEUR: val, spy });
   }
-  if (pf.history.length > 90) pf.history = pf.history.slice(-90);
+  if (pf.history.length > HISTORY_MAX) pf.history = pf.history.slice(-HISTORY_MAX);
 }
 
 // Compute current portfolio value in EUR
@@ -1202,7 +1341,11 @@ function computePortfolioValue(pf) {
   return { total, positions };
 }
 
-// Generate buy/sell suggestions by comparing current allocation vs target
+// Generate buy/sell suggestions by comparing current allocation vs target.
+// Punkt 2: Realistische Schwellen — 5 Prozentpunkte Drift UND mind. 200 € Volumen.
+// Verhindert Mini-Trades, die real an Spreads/Gebühren scheitern würden.
+const REBAL_DRIFT_PP = 5;      // Mindestabweichung in Prozentpunkten
+const REBAL_MIN_EUR  = 200;    // Mindest-Handelsvolumen pro Trade
 function generateTrades(pf, valuation) {
   const trades = [];
   const total = valuation.total;
@@ -1213,25 +1356,34 @@ function generateTrades(pf, valuation) {
     const targetWeight = p.targetAlloc || 0;
     const driftPct = (currentWeight - targetWeight) * 100;
     const driftEUR = (currentWeight - targetWeight) * total;
+    const isCrypto = p.cls && p.cls.startsWith('Krypto');
+    // Hinweis auf §23 EStG: Krypto-Gewinne sind nach 1 Jahr Haltefrist steuerfrei
+    const taxNote = (isCrypto && driftPct > 0) ? ' Hinweis: Krypto-Verkauf ggf. §23 EStG (Haltefrist 1 Jahr) beachten.' : '';
 
-    // Rebalancing threshold: 3 percentage points
-    if (driftPct > 3) {
+    if (driftPct > REBAL_DRIFT_PP && Math.abs(driftEUR) >= REBAL_MIN_EUR) {
       trades.push({
         sym: p.sym, name: p.name, action: 'SELL',
         amountEUR: Math.abs(driftEUR),
-        reason: `Übergewichtet (${(currentWeight*100).toFixed(0)}% statt ${(targetWeight*100).toFixed(0)}%). Teilverkauf zur Rückführung auf Zielallokation. Tagesänderung: ${p.changePct>=0?'+':''}${p.changePct.toFixed(1)}%.`
+        reason: `Übergewichtet (${(currentWeight*100).toFixed(0)}% statt ${(targetWeight*100).toFixed(0)}%). Teilverkauf zur Rückführung auf Zielallokation. Tagesänderung: ${p.changePct>=0?'+':''}${p.changePct.toFixed(1)}%.${taxNote}`
       });
-    } else if (driftPct < -3) {
+    } else if (driftPct < -REBAL_DRIFT_PP && Math.abs(driftEUR) >= REBAL_MIN_EUR) {
       trades.push({
         sym: p.sym, name: p.name, action: 'BUY',
         amountEUR: Math.abs(driftEUR),
         reason: `Untergewichtet (${(currentWeight*100).toFixed(0)}% statt ${(targetWeight*100).toFixed(0)}%). Nachkauf empfohlen. Tagesänderung: ${p.changePct>=0?'+':''}${p.changePct.toFixed(1)}%.`
       });
+    } else if (Math.abs(driftPct) > REBAL_DRIFT_PP) {
+      // Drift vorhanden, aber Volumen zu klein für sinnvollen Trade
+      trades.push({
+        sym: p.sym, name: p.name, action: 'HOLD',
+        amountEUR: 0,
+        reason: `Drift ${driftPct>=0?'+':''}${driftPct.toFixed(1)} PP, aber Volumen unter ${REBAL_MIN_EUR} € — Trade lohnt sich nicht (Spreads/Gebühren).`
+      });
     } else {
       trades.push({
         sym: p.sym, name: p.name, action: 'HOLD',
         amountEUR: 0,
-        reason: `Im Zielkorridor (${(currentWeight*100).toFixed(0)}%). Halten.`
+        reason: `Im Zielkorridor (${(currentWeight*100).toFixed(0)}% · Ziel ${(targetWeight*100).toFixed(0)}% ± ${REBAL_DRIFT_PP} PP). Halten.`
       });
     }
   }
@@ -1268,8 +1420,10 @@ function applyTrades() {
   }
   pf.cashEUR = 0;
   pf.lastEvaluated = Date.now();
-  pf.history.push({ ts: Date.now(), valueEUR: total });
-  if (pf.history.length > 60) pf.history = pf.history.slice(-60);
+  // Punkt 3+9: recordHistoryPoint statt manueller push —
+  // schreibt SPY-Benchmark mit (Chart-Linie bricht nicht mehr ab),
+  // dedupliziert pro Tag und nutzt das einheitliche 90er-Limit.
+  recordHistoryPoint(pf);
   savePortfolio(pf);
   // Re-render (bestehendes Portfolio, daher portfolioIsNew = false)
   const live = Object.values(currentPrices).some(p => p && p.price > 0) || Object.keys(twelvePrices).length > 0;
@@ -1287,40 +1441,97 @@ function resetPortfolio() {
   renderPortfolio(pf, live, true);
 }
 
+// ── Punkt 5: lokaler Sentiment-Plausibilitätscheck ────
+// Berechnet einen Score direkt aus den realen Tagesänderungen und
+// begrenzt Claudes subjektiven Score auf ±15 Punkte um diesen Anker.
+function computeLocalSentiment(snapshot) {
+  const all = [...(snapshot.us||[]), ...(snapshot.eu||[]), ...(snapshot.crypto||[]), ...(snapshot.stocks||[])];
+  if (!all.length) return null;
+  const avg = all.reduce((s, e) => s + (e.changePct || 0), 0) / all.length;
+  return Math.max(0, Math.min(100, Math.round(50 + avg * 8))); // ±6% Ø → 2..98
+}
+function calibrateSentiment(claudeScore, snapshot) {
+  const local = computeLocalSentiment(snapshot);
+  if (local === null) return claudeScore;
+  const c = Math.max(0, Math.min(100, claudeScore || 50));
+  return Math.max(local - 15, Math.min(local + 15, c));
+}
+
+// ── Punkt 14: Benachrichtigungen ──────────────────────
+function updateNotifyBtn() {
+  const btn = document.getElementById('notify-btn');
+  if (!btn) return;
+  if (!('Notification' in window)) { btn.style.display = 'none'; return; }
+  const on = localStorage.getItem(NOTIFY_KEY) === '1' && Notification.permission === 'granted';
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '🔔 Benachrichtigungen aktiv' : '🔔 Benachrichtigungen aktivieren';
+}
+async function toggleNotify() {
+  if (!('Notification' in window)) return;
+  const on = localStorage.getItem(NOTIFY_KEY) === '1' && Notification.permission === 'granted';
+  if (on) {
+    localStorage.setItem(NOTIFY_KEY, '0');
+  } else {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') localStorage.setItem(NOTIFY_KEY, '1');
+    else alert('Benachrichtigungen wurden vom System abgelehnt.\nHinweis: Auf iOS nur in der installierten PWA (iOS 16.4+) möglich.');
+  }
+  updateNotifyBtn();
+}
+function notifyBrief(brief) {
+  try {
+    if (!('Notification' in window)) return;
+    if (localStorage.getItem(NOTIFY_KEY) !== '1' || Notification.permission !== 'granted') return;
+    const labels = { bullish:'🟢 Bullish', neutral:'🟡 Neutral', cautious:'🟠 Vorsicht', bearish:'🔴 Bearish' };
+    const title = `MarketBrief · ${labels[(brief.sentimentLabel||'neutral').toLowerCase()] || 'Update'} (${brief.sentimentScore}/100)`;
+    new Notification(title, { body: brief.alertMessage || 'Neue Marktanalyse verfügbar.', tag: 'mb-brief' });
+  } catch {}
+}
+
 // ── Main load ─────────────────────────────────────────
 async function loadBrief() {
   const btn = document.getElementById('refresh-btn');
   if (btn) btn.disabled = true;
 
   show('loading');
+  setLoading('Verbindung wird aufgebaut…');
   const key = localStorage.getItem(KEY_STORAGE);
   if (!key) { show('key'); return; }
   const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
 
+  isOfflineView = false;
+
   try {
-    // 1) Fetch ALL real prices: stocks (Finnhub), crypto (CoinGecko),
-    //    indices/commodities/FX (Twelve Data). No invented numbers.
+    // 1) Fetch ALL real prices — Punkt 6: progressives Feedback
+    setLoading('Lade Live-Kursdaten…');
     currentPrices = await fetchAllPrices(fhKey || '');
     const priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0)
       || Object.keys(twelvePrices).length > 0;
 
     // 1b) Fetch latest market news (Finnhub) — feeds the analysis
+    setLoading('Lade Marktnachrichten…');
     await fetchMarketNews(fhKey || '');
 
     // 2) Build a LIVE market snapshot to feed Claude's analysis
     const snapshot = buildLiveSnapshot();
 
-    // 3) Claude analyses BASED ON live snapshot + news (cached 1h unless manual)
-    let brief = (btn && btn._manualRefresh) ? null : getCached();
+    // 3) Claude analyses (cached with marktzeiten-abhängiger TTL, Punkt 7)
+    const cached = (btn && btn._manualRefresh) ? null : getCached();
+    let brief = cached ? cached.brief : null;
+    let freshBrief = false;
     if (!brief) {
+      setLoading('KI-Analyse läuft (Claude)…');
       brief = await fetchBriefFromClaude(key, snapshot, currentNews);
-      setCache(brief);
+      setCache(brief, snapshot, currentNews);
+      freshBrief = true;
     }
     if (btn) btn._manualRefresh = false;
 
+    // Punkt 5: Sentiment-Score an reale Bewegungen koppeln
+    brief.sentimentScore = calibrateSentiment(brief.sentimentScore, snapshot);
+
+    setLoading('Portfolio wird bewertet…');
     // 4) Portfolio — bestehende lokale Speicherung weiterverwenden.
-    //    Neue Bewertung setzt IMMER auf den gespeicherten Daten auf;
-    //    ein neues Portfolio wird nur beim allerersten Start erstellt.
     let pf = getPortfolio();
     let portfolioIsNew = false;
     if (!pf || !isValidPortfolio(pf)) {
@@ -1328,8 +1539,6 @@ async function loadBrief() {
       savePortfolio(pf);
       portfolioIsNew = true;
     } else {
-      // Bestehendes Portfolio: Zeitstempel der letzten Bewertung aktualisieren,
-      // Bestände (units, Einstandskurse, Verlauf) bleiben unverändert erhalten.
       pf.lastEvaluated = Date.now();
     }
 
@@ -1340,11 +1549,32 @@ async function loadBrief() {
     // 5) Render — live data only
     renderBrief(brief, priceSourceLive, snapshot);
     renderPortfolio(pf, priceSourceLive, portfolioIsNew);
+    document.getElementById('offline-pill').style.display = 'none';
+    updateNotifyBtn();
+
+    // Punkt 14: bei frischer Analyse benachrichtigen
+    if (freshBrief) notifyBrief(brief);
 
     show('dash');
     window.scrollTo(0, 0);
 
   } catch (err) {
+    // Punkt 8: Offline-Fallback — letzten erfolgreichen Brief anzeigen statt Error-Screen
+    const stale = getCached(true);
+    if (stale && stale.brief && stale.snapshot) {
+      isOfflineView = true;
+      currentNews = stale.news || [];
+      try {
+        renderBrief(stale.brief, false, stale.snapshot);
+        const pf = getPortfolio();
+        if (pf && isValidPortfolio(pf)) renderPortfolio(pf, false, false);
+        document.getElementById('offline-pill').style.display = 'block';
+        updateNotifyBtn();
+        show('dash');
+        window.scrollTo(0, 0);
+        return;
+      } catch (renderErr) { /* fällt durch zum Error-Screen */ }
+    }
     const detail = [
       err.message || String(err),
       err.name ? 'Type: ' + err.name : '',
@@ -1384,6 +1614,12 @@ function buildLiveSnapshot() {
     }
   }
 
+  // Punkt 12: Volatilität (VIXY) als VIX-Proxy — Angstindikator im Makro-Block.
+  // Steigende VIXY = steigende erwartete Volatilität = Risk-off-Signal.
+  if (vixQuote && vixQuote.price > 0) {
+    snap.macro.push({ name: 'Volatilität', sub: VIX_PROXY.sub, price: vixQuote.price, changePct: vixQuote.changePct, inverse: true });
+  }
+
   // Swiss from Twelve Data
   for (const s of SWISS_SYMBOLS) {
     const live = swissPrices[s.key];
@@ -1413,7 +1649,7 @@ function snapshotToText(snap) {
   if (snap.eu.length)     lines.push('Europa: ' + snap.eu.map(fmt).join(' | '));
   if (snap.swiss.length)  lines.push('Schweiz: ' + snap.swiss.map(fmt).join(' | '));
   if (snap.crypto.length) lines.push('Krypto: ' + snap.crypto.map(fmt).join(' | '));
-  if (snap.macro.length)  lines.push('Rohstoffe/FX: ' + snap.macro.map(fmt).join(' | '));
+  if (snap.macro.length)  lines.push('Rohstoffe/FX/Volatilität: ' + snap.macro.map(fmt).join(' | ') + (snap.macro.some(m=>m.name==='Volatilität') ? ' [Hinweis: steigende Volatilität = Risk-off]' : ''));
   if (snap.stocks.length) lines.push('Einzelaktien: ' + snap.stocks.map(fmt).join(' | '));
   return lines.join('\n');
 }
@@ -1470,7 +1706,9 @@ Wichtig: sentimentScore muss zu den realen Bewegungen passen (viele Minuszeichen
   if (s === -1 || e2 === -1) throw new Error('Kein JSON in Antwort gefunden.');
   c = c.slice(s, e2+1);
   const brief = JSON.parse(c);
-  if (brief.recommendation) brief.recommendation = brief.recommendation.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  // Punkt 10: erst HTML-escapen, DANN **bold** → <strong>.
+  // Verhindert XSS aus manipulierten API-Antworten; nur <strong> wird erzeugt.
+  if (brief.recommendation) brief.recommendation = esc(brief.recommendation).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
   return brief;
 }
 
@@ -1617,18 +1855,21 @@ function renderBrief(b, priceSourceLive, snapshot) {
     return `${esc(s.name)} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(s.changePct||0).toFixed(1)}%</span>`;
   }).join(' · ') || 'Keine Daten');
 
-  // Macro — LIVE Twelve Data commodities/FX only
+  // Macro — LIVE Twelve Data commodities/FX + VIXY only
   if (snapshot.macro && snapshot.macro.length) {
     document.getElementById('macro-list').innerHTML = snapshot.macro.map(m => {
       const isForex = m.name === 'EUR/USD';
+      const isVol = m.inverse === true; // Punkt 12: Volatilität — Farblogik invertiert
       const p = isForex ? m.price.toFixed(4) : m.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
       const chg = m.changePct || 0;
       const arrow = chg >= 0 ? '▲' : '▼';
       const valStr = (isForex ? p : '$' + p) + ' ' + arrow + ' ' + (chg>=0?'+':'') + chg.toFixed(1) + '%';
-      const cls = chg >= 0 ? 'pos' : 'neg';
+      // Steigende Volatilität = schlecht (rot), fallende = gut (grün)
+      const cls = isVol ? (chg >= 0 ? 'neg' : 'pos') : (chg >= 0 ? 'pos' : 'neg');
+      const nameStr = isVol ? `${m.name} <span style="font-size:8px;color:var(--muted)">(${esc(m.sub||'')})</span>` : esc(m.name);
       return `
       <li class="macro-item">
-        <span class="macro-key">${esc(m.name)} <span style="font-size:8px;color:var(--green)">●</span></span>
+        <span class="macro-key">${nameStr} <span style="font-size:8px;color:var(--green)">●</span></span>
         <span class="macro-val ${cls}">${esc(valStr)}</span>
       </li>`;
     }).join('');
@@ -1796,13 +2037,22 @@ function renderChart(pf, currentTotal) {
   const pfLast = pts[pts.length-1].pf;
   const pfColor = pfLast >= 100 ? 'var(--green)' : 'var(--red)';
 
+  // Punkt 13: X-Achsen-Datumsbeschriftung (Start · Mitte · Ende)
+  const fmtDate = ts => new Date(ts).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' });
+  const startDate = fmtDate(hist[0].ts);
+  const endDate = fmtDate(hist[hist.length-1].ts);
+  const midDate = hist.length >= 5 ? fmtDate(hist[Math.floor(hist.length/2)].ts) : '';
+
   el.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
       <line x1="${padL}" y1="${y(100).toFixed(1)}" x2="${W-padR}" y2="${y(100).toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,3"/>
       ${hasBench ? `<path d="${benchPath}" fill="none" stroke="var(--muted)" stroke-width="1.5" opacity="0.7"/>` : ''}
       <path d="${pfPath}" fill="none" stroke="${pfColor}" stroke-width="2"/>
     </svg>
-    <div style="display:flex;gap:16px;margin-top:10px;font-family:'DM Mono',monospace;font-size:9px;">
+    <div class="chart-axis">
+      <span>${startDate}</span>${midDate ? `<span>${midDate}</span>` : ''}<span>${endDate}</span>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-family:'DM Mono',monospace;font-size:9px;">
       <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:2px;background:${pfColor};display:inline-block"></span> Portfolio ${pfLast>=100?'+':''}${(pfLast-100).toFixed(1)}%</span>
       ${hasBench ? `<span style="display:flex;align-items:center;gap:5px;color:var(--muted)"><span style="width:14px;height:2px;background:var(--muted);display:inline-block"></span> S&amp;P 500 ${pts[pts.length-1].bench>=100?'+':''}${(pts[pts.length-1].bench-100).toFixed(1)}%</span>` : ''}
     </div>`;
