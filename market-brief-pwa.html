@@ -1115,6 +1115,7 @@ body.light #install-banner { box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
       <div class="sep"></div>
       <button class="notify-btn" id="notify-btn" onclick="toggleNotify()">🔔 Benachrichtigungen aktivieren</button>
       <div class="footer-updated" id="footer-updated"></div>
+      <div class="footer-updated" id="ws-status" onclick="toggleLiveTicker()" style="cursor:pointer;margin-top:4px;user-select:none"></div>
       <div class="footer-legal">KEIN ANLAGEBERATUNG · MARKET BRIEF</div>
     </div>
 
@@ -1171,6 +1172,7 @@ const DAYTRADE_KEY  = 'mb_daytrade';
 const DT_TARGET_PCT = 3.0;    // Tagesziel in %
 const DT_STOP_PCT   = -1.5;   // Tagesverlustlimit in % (asymmetrisch: 2:1 Chance/Risiko)
 const DT_AUTOREFRESH_MS = 5 * 60 * 1000; // Auto-Refresh alle 5 Min (Handelszeiten)
+const WS_ENABLED_KEY = 'mb_ws_on';       // Punkt 20: Live-Ticker an/aus (Standard: an)
 
 // ── CHANCEN-SCANNER ──
 // Kuratierte Watchlist hochliquider US-Large-Caps (~50% der S&P-500-Marktkap.).
@@ -2121,6 +2123,153 @@ function startAutoRefresh() {
   }, DT_AUTOREFRESH_MS);
 }
 
+// ── Punkt 20: LIVE-TICKER via Finnhub WebSocket ───────
+// Push-Kurse in Echtzeit während der US-Session (Mo–Fr 15:30–22:00),
+// statt auf den 5-Minuten-Refresh zu warten. Akku-schonend:
+// - verbindet NUR während der US-Handelszeit
+// - trennt sofort, wenn die App in den Hintergrund geht
+// - sammelt Trades in einem Puffer und aktualisiert die UI nur alle 5s
+// Abgedeckt: NVDA, MSFT, VOO (Portfolio) + SPY, QQQ, DIA (US-Indizes).
+let ws = null;
+let wsBuf = {};              // symbol -> letzter Trade-Preis
+let wsFlushTimer = null;
+let wsWatchTimer = null;
+let wsRetryDelay = 5000;
+let wsLastFlush = 0;
+let lastBriefForRender = null; // wird in renderBrief gesetzt
+
+function wsEnabled() { return localStorage.getItem(WS_ENABLED_KEY) !== '0'; }
+
+function wsIsUsSession() {
+  const now = new Date();
+  const day = now.getDay();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return day >= 1 && day <= 5 && mins >= (15 * 60 + 30) && mins < (22 * 60);
+}
+
+function wsSymbols() {
+  const syms = UNIVERSE.filter(x => x.source === 'finnhub').map(x => x.finnhub);
+  for (const ix of INDEX_PROXIES) syms.push(ix.finnhub);
+  return [...new Set(syms)];
+}
+
+// Preis-Update in einen Store schreiben — nur wenn der REST-Abruf vorher
+// einen Basiswert geliefert hat (sonst fehlt der prevClose für die %-Änderung).
+function wsUpdateEntry(store, key, p) {
+  const e = store[key];
+  if (!e || !(e.price > 0)) return;
+  const pc = (e.prevClose > 0) ? e.prevClose : (e.changePct ? e.price / (1 + e.changePct / 100) : 0);
+  store[key] = { ...e, price: p, prevClose: pc, changePct: pc > 0 ? ((p - pc) / pc) * 100 : e.changePct };
+}
+
+function wsApply(sym, p) {
+  if (!(p > 0)) return;
+  const u = UNIVERSE.find(x => x.source === 'finnhub' && x.finnhub === sym);
+  if (u) wsUpdateEntry(currentPrices, u.sym, p);
+  const ix = INDEX_PROXIES.find(x => x.finnhub === sym);
+  if (ix) {
+    wsUpdateEntry(indexPrices, ix.key, p);
+    wsUpdateEntry(twelvePrices, ix.key, p); // SPY/QQQ speisen auch die US-Karte
+  }
+}
+
+function startLiveTicker() {
+  updateWsStatus();
+  const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
+  if (!fhKey || !wsEnabled() || !wsIsUsSession() || document.hidden || ws) return;
+  try {
+    ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(fhKey));
+    ws.onopen = () => {
+      wsRetryDelay = 5000;
+      for (const s of wsSymbols()) {
+        try { ws.send(JSON.stringify({ type: 'subscribe', symbol: s })); } catch {}
+      }
+      updateWsStatus();
+    };
+    ws.onmessage = ev => {
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'trade' && Array.isArray(m.data)) {
+          for (const t of m.data) if (t.s && t.p > 0) wsBuf[t.s] = t.p;
+        }
+      } catch {}
+    };
+    ws.onclose = () => {
+      ws = null;
+      updateWsStatus();
+      // Reconnect mit Backoff — aber nur, wenn die Bedingungen noch stimmen
+      if (wsEnabled() && wsIsUsSession() && !document.hidden) {
+        setTimeout(startLiveTicker, wsRetryDelay);
+        wsRetryDelay = Math.min(wsRetryDelay * 2, 60000);
+      }
+    };
+    ws.onerror = () => { try { ws.close(); } catch {} };
+  } catch (e) { ws = null; }
+  if (!wsFlushTimer) wsFlushTimer = setInterval(wsFlush, 5000);
+}
+
+function stopLiveTicker() {
+  if (ws) { const w = ws; ws = null; try { w.onclose = null; w.close(); } catch {} }
+  wsBuf = {};
+  updateWsStatus();
+}
+
+// Gepufferte Trades anwenden und die Ansicht schonend neu zeichnen.
+function wsFlush() {
+  const syms = Object.keys(wsBuf);
+  if (!syms.length || !ws) return;
+  for (const s of syms) wsApply(s, wsBuf[s]);
+  wsBuf = {};
+  wsLastFlush = Date.now();
+  if (lastBriefForRender) {
+    try {
+      renderBrief(lastBriefForRender, true, buildLiveSnapshot());
+      const pf = getPortfolio();
+      if (pf && isValidPortfolio(pf)) renderPortfolio(pf, true, false);
+    } catch (e) { /* Anzeige bleibt beim letzten Stand */ }
+  }
+  updateWsStatus();
+}
+
+function updateWsStatus() {
+  const el = document.getElementById('ws-status');
+  if (!el) return;
+  const fhKey = localStorage.getItem(FINNHUB_KEY_STORAGE);
+  if (!fhKey) { el.textContent = ''; return; }
+  if (!wsEnabled()) {
+    el.textContent = '⚡ Live-Ticker aus · tippen zum Aktivieren';
+  } else if (ws && ws.readyState === 1) {
+    const t = wsLastFlush ? new Date(wsLastFlush).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+    el.textContent = `⚡ Live-Ticker aktiv (US-Session) · letztes Update ${t} · tippen zum Deaktivieren`;
+  } else if (wsIsUsSession()) {
+    el.textContent = '⚡ Live-Ticker verbindet…';
+  } else {
+    el.textContent = '⚡ Live-Ticker bereit · aktiv Mo–Fr 15:30–22:00 (US-Session)';
+  }
+}
+
+function toggleLiveTicker() {
+  const now = wsEnabled();
+  localStorage.setItem(WS_ENABLED_KEY, now ? '0' : '1');
+  if (now) stopLiveTicker(); else startLiveTicker();
+}
+
+// Einmalige Initialisierung: Sichtbarkeits-Handling + Minuten-Wächter
+// (Session beginnt/endet, während die App offen ist).
+let wsInitDone = false;
+function initLiveTicker() {
+  if (wsInitDone) return;
+  wsInitDone = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopLiveTicker();
+    else startLiveTicker();
+  });
+  wsWatchTimer = setInterval(() => {
+    if (ws && !wsIsUsSession()) stopLiveTicker();
+    else if (!ws) startLiveTicker();
+  }, 60 * 1000);
+}
+
 // ── Main load ─────────────────────────────────────────
 // silent=true (Auto-Refresh): kein Loading-Screen, kein Scroll,
 // Fehler werden verschluckt (alte Ansicht bleibt stehen).
@@ -2203,6 +2352,8 @@ async function loadBrief(silent = false) {
     show('dash');
     if (!silent) window.scrollTo(0, 0);
     startAutoRefresh();
+    initLiveTicker();     // Punkt 20: Sichtbarkeits-Handling + Session-Wächter
+    startLiveTicker();    // Punkt 20: WS verbinden, falls US-Session läuft
 
   } catch (err) {
     // Silent-Refresh: Fehler ignorieren, alte Ansicht bleibt stehen
@@ -2424,6 +2575,7 @@ function retryFetch() {
 
 // ── Render: market brief ──────────────────────────────
 function renderBrief(b, priceSourceLive, snapshot) {
+  lastBriefForRender = b;   // Punkt 20: für sanfte Live-Ticker-Re-Renders merken
   document.getElementById('hdr-date').textContent = (b.date || '').toUpperCase();
   const sentColors = { bullish:'#4ecba0', neutral:'#e8c547', cautious:'#e8a047', bearish:'#e05757' };
   const sentLabels = { bullish:'🟢 BULLISH', neutral:'🟡 NEUTRAL', cautious:'🟠 VORSICHT', bearish:'🔴 BEARISH' };
