@@ -1123,7 +1123,9 @@ body.light #install-banner { box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
 
 <script>
 // ── Constants ─────────────────────────────────────────
-const API_ENDPOINT = 'https://marketbriefproxy.loysl61.workers.dev/';
+const PROXY_BASE   = 'https://marketbriefproxy.loysl61.workers.dev';
+const API_ENDPOINT = PROXY_BASE + '/';               // Anthropic-Proxy (POST, wie bisher)
+const INDICES_ENDPOINT = PROXY_BASE + '/indices';    // Punkt 16: echte Indizes via Worker (Yahoo)
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
 const TWELVEDATA_BASE = 'https://api.twelvedata.com';
@@ -1136,6 +1138,8 @@ const PORTFOLIO_KEY = 'mb_portfolio';
 const EURUSD_KEY   = 'mb_eurusd';        // Punkt 4: letzter bekannter EUR/USD-Kurs
 const TD_CACHE_KEY = 'mb_td_cache';      // Punkt 11: 60s-Cache gegen Twelve-Data-Rate-Limit
 const TD_CACHE_TS  = 'mb_td_cache_ts';
+const IDX_CACHE_KEY = 'mb_idx_cache';    // Punkt 16: 60s-Cache für Worker-Indizes
+const IDX_CACHE_TS  = 'mb_idx_cache_ts';
 const NOTIFY_KEY   = 'mb_notify';        // Punkt 14
 const THEME_KEY    = 'mb_theme';         // Punkt 15
 const HISTORY_MAX  = 90;                 // Punkt 9: EIN einheitliches History-Limit
@@ -1206,20 +1210,28 @@ const INDEX_PROXIES = [
 let indexPrices = {}; // key -> {price, changePct}
 
 // Twelve Data symbols (free tier) — MAX 8 pro Minute (Rate-Limit!).
-// Index-Codes (GSPC, GDAXI) funktionieren NICHT im Free-Tier.
-// Stattdessen: ETF-Stellvertreter (laufen als normale Aktien) + Forex + Gold.
-// SPY→S&P500, EWG→DAX/Deutschland, Gold & EUR/USD direkt.
+// Punkt 16: EWG/VGK/EWL entfernt (US-gelistete ETFs waren tagsüber in
+// Europa STALE — Handel nur 15:30–22:00 MEZ). Europa kommt jetzt als
+// ECHTER Index über den Worker (YAHOO_INDICES unten). 3 Credits frei.
 const TWELVE_SYMBOLS = [
   { key: 'S&P 500',  td: 'SPY',     label: 'via SPY ETF',    group: 'us',    fx: 'usd' },
   { key: 'Nasdaq',   td: 'QQQ',     label: 'via QQQ ETF',    group: 'us',    fx: 'usd' },
-  { key: 'Deutschland', td: 'EWG',  label: 'via EWG ETF',    group: 'eu',    fx: 'usd' },
-  { key: 'Europa',   td: 'VGK',     label: 'via VGK ETF',    group: 'eu',    fx: 'usd' },
-  { key: 'Schweiz',  td: 'EWL',     label: 'via EWL ETF',    group: 'swiss', fx: 'usd' },
   { key: 'Gold',     td: 'XAU/USD', label: 'Troy Oz',        group: 'macro', fx: 'usd' },
   { key: 'Öl (WTI)', td: 'WTI/USD', label: 'Barrel',         group: 'macro', fx: 'usd' },  // Punkt 11
   { key: 'EUR/USD',  td: 'EUR/USD', label: 'Devisen',        group: 'macro', fx: 'none' },
 ];
 let twelvePrices = {}; // key -> {price, changePct}
+
+// Punkt 16: ECHTE Indizes via Worker-Proxy (Yahoo Finance, kein Key).
+// Endlich der echte DAX in Punkten — live während der Xetra-Handelszeit
+// (9:00–17:30), nicht mehr der New-Yorker EWG-Schlusskurs vom Vorabend.
+const YAHOO_INDICES = [
+  { key: 'DAX',          y: '^GDAXI',    label: 'Xetra · echter Index', group: 'eu' },
+  { key: 'EuroStoxx 50', y: '^STOXX50E', label: 'Europa Blue Chips',    group: 'eu' },
+  { key: 'SMI',          y: '^SSMI',     label: 'Swiss Market Index',   group: 'swiss' },
+  { key: 'VIX',          y: '^VIX',      label: 'CBOE · echter VIX',    group: 'vix' },
+];
+let yahooPrices = {}; // key -> {price, changePct, state, time}
 
 // Punkt 12: VIX-Proxy über VIXY-ETF (Finnhub Free-Tier).
 // Absoluter Preis ist wenig aussagekräftig — die TAGESÄNDERUNG ist das Angstsignal.
@@ -1369,6 +1381,40 @@ async function fetchQuote(finnhubSym, fhKey) {
   return { price: d.c || 0, prevClose: d.pc || 0, changePct: d.dp || 0 };
 }
 
+// Punkt 16: Echte Indizes über den Worker holen (ein Request für alle).
+// 60s-Micro-Cache wie bei Twelve Data — schützt Worker & Yahoo bei Doppel-Refresh.
+async function fetchYahooIndices() {
+  yahooPrices = {};
+  try {
+    let d = null;
+    const cacheTs = parseInt(localStorage.getItem(IDX_CACHE_TS) || '0');
+    if (Date.now() - cacheTs < 60 * 1000) {
+      d = JSON.parse(localStorage.getItem(IDX_CACHE_KEY) || 'null');
+    }
+    if (!d) {
+      const syms = YAHOO_INDICES.map(x => x.y).join(',');
+      const r = await fetch(`${INDICES_ENDPOINT}?s=${encodeURIComponent(syms)}`);
+      if (!r.ok) return;
+      d = await r.json();
+      try {
+        localStorage.setItem(IDX_CACHE_KEY, JSON.stringify(d));
+        localStorage.setItem(IDX_CACHE_TS, String(Date.now()));
+      } catch {}
+    }
+    for (const ix of YAHOO_INDICES) {
+      const row = d[ix.y];
+      if (row && row.price > 0) {
+        yahooPrices[ix.key] = {
+          price: row.price,
+          changePct: row.changePct || 0,
+          state: row.state || '',
+          time: row.time || 0
+        };
+      }
+    }
+  } catch (e) { /* Worker nicht erreichbar → Karten zeigen "keine Daten" */ }
+}
+
 async function fetchAllPrices(fhKey) {
   const prices = {};
 
@@ -1398,7 +1444,15 @@ async function fetchAllPrices(fhKey) {
     for (const u of UNIVERSE.filter(x => x.source === 'finnhub')) prices[u.sym] = null;
   }
 
-  // 1c) TWELVE DATA — Punkt 11: 8 Symbole = exakt am 8-Credit-Limit.
+  // 1b) Punkt 16: ECHTE Indizes (DAX, EuroStoxx, SMI, VIX) via Worker.
+  //     Läuft ohne Key; ersetzt die stale US-ETF-Proxies EWG/VGK/EWL.
+  await fetchYahooIndices();
+  if (yahooPrices['VIX'] && yahooPrices['VIX'].price > 0) {
+    // Echter CBOE-VIX schlägt den VIXY-ETF-Proxy
+    vixQuote = { price: yahooPrices['VIX'].price, changePct: yahooPrices['VIX'].changePct, sub: 'CBOE ^VIX · echt' };
+  }
+
+  // 1c) TWELVE DATA — Punkt 11+16: nur noch 5 Symbole (3 Credits Puffer).
   //     Deshalb 60s-Micro-Cache: verhindert Rate-Limit-Bruch bei schnellem Doppel-Refresh.
   twelvePrices = {};
   swissPrices = {};
@@ -2092,6 +2146,21 @@ function buildLiveSnapshot() {
     else if (s.group === 'macro') snap.macro.push(entry);
   }
 
+  // Punkt 16: ECHTE Indizes vom Worker (DAX, EuroStoxx 50, SMI).
+  // Staleness-Kennzeichnung: außerhalb der Handelszeit → "Schlusskurs".
+  for (const ix of YAHOO_INDICES) {
+    if (ix.group === 'vix') continue; // VIX geht unten in den Makro-Block
+    const live = yahooPrices[ix.key];
+    if (!live || !(live.price > 0)) continue;
+    const stale = live.state && live.state !== 'REGULAR';
+    snap[ix.group === 'swiss' ? 'swiss' : 'eu'].push({
+      name: ix.key,
+      sub: ix.label + (stale ? ' · Schlusskurs' : ' · live'),
+      price: live.price,
+      changePct: live.changePct
+    });
+  }
+
   // Fallback for US: if Twelve Data gave no US indices, use Finnhub ETF proxies
   if (snap.us.length === 0) {
     for (const ix of INDEX_PROXIES) {
@@ -2102,10 +2171,10 @@ function buildLiveSnapshot() {
     }
   }
 
-  // Punkt 12: Volatilität (VIXY) als VIX-Proxy — Angstindikator im Makro-Block.
-  // Steigende VIXY = steigende erwartete Volatilität = Risk-off-Signal.
+  // Punkt 12+16: Volatilität — echter CBOE-VIX (bevorzugt) oder VIXY-Proxy.
+  // Steigende Volatilität = Risk-off-Signal.
   if (vixQuote && vixQuote.price > 0) {
-    snap.macro.push({ name: 'Volatilität', sub: VIX_PROXY.sub, price: vixQuote.price, changePct: vixQuote.changePct, inverse: true });
+    snap.macro.push({ name: 'Volatilität', sub: vixQuote.sub || VIX_PROXY.sub, price: vixQuote.price, changePct: vixQuote.changePct, inverse: true });
   }
 
   // Swiss from Twelve Data
@@ -2235,7 +2304,7 @@ function renderBrief(b, priceSourceLive, snapshot) {
   // Render index rows from LIVE snapshot entries only
   function liveRows(entries) {
     if (!entries || !entries.length) {
-      return `<div style="padding:14px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.<br>Twelve Data Key nötig.</div>`;
+      return `<div style="padding:14px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.</div>`;
     }
     return entries.map(e => {
       const isForex = e.name === 'EUR/USD';
@@ -2266,7 +2335,7 @@ function renderBrief(b, priceSourceLive, snapshot) {
     if (!entries || !entries.length) return 'Keine Live-Daten';
     return entries.slice(0, n).map(e => {
       const isPos = (e.changePct||0) >= 0;
-      const short = e.name.replace('S&P 500','S&P').replace('EURO STOXX 50','STOXX').replace('Dow Jones','Dow');
+      const short = e.name.replace('S&P 500','S&P').replace('EuroStoxx 50','STOXX').replace('EURO STOXX 50','STOXX').replace('Dow Jones','Dow');
       return `${esc(short)} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(e.changePct||0).toFixed(1)}%</span>`;
     }).join(' · ');
   }
@@ -2288,7 +2357,7 @@ function renderBrief(b, priceSourceLive, snapshot) {
             <div class="idx-sub">${esc(e.sub)}</div>
           </div>
           <div class="idx-right">
-            <div class="idx-price">$${esc(priceStr)}</div>
+            <div class="idx-price">${esc(priceStr)}</div>
             <div class="idx-chg ${isPos ? 'pos' : 'neg'}">${esc(changeStr)}</div>
           </div>
         </div>`;
@@ -2297,8 +2366,8 @@ function renderBrief(b, priceSourceLive, snapshot) {
       const isPos = (sw.changePct||0) >= 0;
       setSummary('sum-swiss', `${esc(sw.name)} <span class="${isPos?'pos':'neg'}">${isPos?'+':''}${(sw.changePct||0).toFixed(1)}%</span>`);
     } else {
-      swissEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.<br>Twelve Data Key nötig.</div>`;
-      setSummary('sum-swiss', 'Twelve Data Key nötig');
+      swissEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6">Keine Live-Daten verfügbar.<br>Worker-Proxy nicht erreichbar.</div>`;
+      setSummary('sum-swiss', 'Keine Live-Daten');
     }
   }
 
@@ -2455,10 +2524,10 @@ function buildIntradaySignals(positions) {
   if (vixQuote && Math.abs(vixQuote.changePct) >= 3) {
     if (vixQuote.changePct > 0) {
       sigs.push({ name: 'Gesamtmarkt', chg: vixQuote.changePct, cls: 'neg', label: 'RISK-OFF',
-        text: `Volatilität (VIXY) +${vixQuote.changePct.toFixed(1)}% — Positionsgrößen halbieren, engere Stops, keine neuen Longs gegen den Trend.` });
+        text: `Volatilität (${(vixQuote.sub||'VIXY').includes('CBOE') ? 'VIX' : 'VIXY'}) +${vixQuote.changePct.toFixed(1)}% — Positionsgrößen halbieren, engere Stops, keine neuen Longs gegen den Trend.` });
     } else {
       sigs.push({ name: 'Gesamtmarkt', chg: vixQuote.changePct, cls: 'pos', label: 'RISK-ON',
-        text: `Volatilität (VIXY) ${vixQuote.changePct.toFixed(1)}% — beruhigtes Umfeld, Trendfolge-Setups bevorzugen.` });
+        text: `Volatilität (${(vixQuote.sub||'VIXY').includes('CBOE') ? 'VIX' : 'VIXY'}) ${vixQuote.changePct.toFixed(1)}% — beruhigtes Umfeld, Trendfolge-Setups bevorzugen.` });
     }
   }
   for (const p of positions) {
