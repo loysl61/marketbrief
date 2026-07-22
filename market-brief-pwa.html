@@ -912,6 +912,19 @@ body.light #install-banner { box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
       <div class="acc-content"><div class="acc-inner"><ul class="macro-list" id="macro-list"></ul></div></div>
     </div>
 
+    <!-- Punkt 17: EZB & Konjunktur (EZB Data Portal + Bundesbank, kostenlos) -->
+    <div class="accordion" data-acc="ezb">
+      <div class="acc-header" onclick="toggleAcc(this)">
+        <span class="acc-icon">🏛️</span>
+        <div class="acc-titles">
+          <div class="acc-title">EZB &amp; Konjunktur</div>
+          <div class="acc-summary" id="sum-ezb">—</div>
+        </div>
+        <span class="acc-chevron">▾</span>
+      </div>
+      <div class="acc-content"><div class="acc-inner"><ul class="macro-list" id="ezb-list"></ul></div></div>
+    </div>
+
     <!-- Topics -->
     <div class="accordion" data-acc="topics">
       <div class="acc-header" onclick="toggleAcc(this)">
@@ -1126,6 +1139,7 @@ body.light #install-banner { box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
 const PROXY_BASE   = 'https://marketbriefproxy.loysl61.workers.dev';
 const API_ENDPOINT = PROXY_BASE + '/';               // Anthropic-Proxy (POST, wie bisher)
 const INDICES_ENDPOINT = PROXY_BASE + '/indices';    // Punkt 16: echte Indizes via Worker (Yahoo)
+const MACRO_ENDPOINT   = PROXY_BASE + '/macro';      // Punkt 17: EZB + Bundesbank via Worker
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
 const TWELVEDATA_BASE = 'https://api.twelvedata.com';
@@ -1140,6 +1154,10 @@ const TD_CACHE_KEY = 'mb_td_cache';      // Punkt 11: 60s-Cache gegen Twelve-Dat
 const TD_CACHE_TS  = 'mb_td_cache_ts';
 const IDX_CACHE_KEY = 'mb_idx_cache';    // Punkt 16: 60s-Cache für Worker-Indizes
 const IDX_CACHE_TS  = 'mb_idx_cache_ts';
+const ECB_CACHE_KEY = 'mb_ecb_cache';    // Punkt 17: 6h-Cache für EZB/Bundesbank-Daten
+const ECB_CACHE_TS  = 'mb_ecb_cache_ts';
+const FRK_CACHE_KEY = 'mb_frk_cache';    // Punkt 18: 1h-Cache für Frankfurter (EZB-Referenzkurs)
+const FRK_CACHE_TS  = 'mb_frk_cache_ts';
 const NOTIFY_KEY   = 'mb_notify';        // Punkt 14
 const THEME_KEY    = 'mb_theme';         // Punkt 15
 const HISTORY_MAX  = 90;                 // Punkt 9: EIN einheitliches History-Limit
@@ -1415,6 +1433,55 @@ async function fetchYahooIndices() {
   } catch (e) { /* Worker nicht erreichbar → Karten zeigen "keine Daten" */ }
 }
 
+// Punkt 17: EZB-Einlagenzins, Inflation EZ/DE, Bund-Rendite 10J via Worker.
+// Tages-/Monatsdaten → 6h-Cache in localStorage genügt völlig.
+let ecbMacro = null; // { ezbEinlagenzins, inflationEZ, inflationDE, bund10y } je {value, period}
+async function fetchEcbMacro() {
+  try {
+    const cacheTs = parseInt(localStorage.getItem(ECB_CACHE_TS) || '0');
+    if (Date.now() - cacheTs < 6 * 60 * 60 * 1000) {
+      ecbMacro = JSON.parse(localStorage.getItem(ECB_CACHE_KEY) || 'null');
+      if (ecbMacro) return;
+    }
+    const r = await fetch(MACRO_ENDPOINT);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && (d.ezbEinlagenzins || d.inflationEZ || d.inflationDE || d.bund10y)) {
+      ecbMacro = d;
+      try {
+        localStorage.setItem(ECB_CACHE_KEY, JSON.stringify(d));
+        localStorage.setItem(ECB_CACHE_TS, String(Date.now()));
+      } catch {}
+    }
+  } catch (e) { /* Karte zeigt dann "keine Daten" */ }
+}
+
+// Punkt 18: Frankfurter (api.frankfurter.dev) — EZB-Referenzkurs als
+// EUR/USD-Fallback. Kostenlos, kein Key, CORS offen, direkt vom Browser.
+// Nur EIN Kurs pro Werktag (~16:00 MEZ) → kein Live-Ersatz, aber ein
+// robuster Anker, falls Twelve Data ausfällt.
+let frankfurterEURUSD = null; // { price, date }
+async function fetchFrankfurterFallback() {
+  try {
+    const cacheTs = parseInt(localStorage.getItem(FRK_CACHE_TS) || '0');
+    if (Date.now() - cacheTs < 60 * 60 * 1000) {
+      frankfurterEURUSD = JSON.parse(localStorage.getItem(FRK_CACHE_KEY) || 'null');
+      if (frankfurterEURUSD) { persistEURUSD(frankfurterEURUSD.price); return; }
+    }
+    const r = await fetch('https://api.frankfurter.dev/v2/rate/EUR/USD');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.rate > 0) {
+      frankfurterEURUSD = { price: d.rate, date: d.date || '' };
+      persistEURUSD(d.rate); // Punkt 4: bester bekannter Kurs für alle Umrechnungen
+      try {
+        localStorage.setItem(FRK_CACHE_KEY, JSON.stringify(frankfurterEURUSD));
+        localStorage.setItem(FRK_CACHE_TS, String(Date.now()));
+      } catch {}
+    }
+  } catch (e) {}
+}
+
 async function fetchAllPrices(fhKey) {
   const prices = {};
 
@@ -1497,6 +1564,12 @@ async function fetchAllPrices(fhKey) {
         }
       }
     } catch (e) { /* keep fallbacks */ }
+  }
+
+  // 1d) Punkt 18: EUR/USD-Fallback via Frankfurter, wenn Twelve Data
+  //     nichts geliefert hat (kein Key, Rate-Limit, Ausfall …)
+  if (!twelvePrices['EUR/USD'] || !(twelvePrices['EUR/USD'].price > 0)) {
+    await fetchFrankfurterFallback();
   }
 
   // 2) CRYPTO via CoinGecko (free, no key, gives USD + EUR + 24h change)
@@ -2041,11 +2114,15 @@ async function loadBrief(silent = false) {
     const priceSourceLive = Object.values(currentPrices).some(p => p && p.price > 0)
       || Object.keys(twelvePrices).length > 0;
 
-    // 1b) Fetch latest market news (Finnhub) — feeds the analysis
+    // 1b) Punkt 17: EZB/Bundesbank-Makrodaten (6h-Cache → meist instant)
+    if (!silent) setLoading('Lade EZB- & Konjunkturdaten…');
+    await fetchEcbMacro();
+
+    // 1c) Fetch latest market news (Finnhub) — feeds the analysis
     if (!silent) setLoading('Lade Marktnachrichten…');
     await fetchMarketNews(fhKey || '');
 
-    // 1c) Chancen-Scanner: Watchlist + Top-Krypto scannen
+    // 1d) Chancen-Scanner: Watchlist + Top-Krypto scannen
     if (!silent) setLoading('Scanne Einzelwerte…');
     await fetchScanData(fhKey || '');
 
@@ -2177,6 +2254,26 @@ function buildLiveSnapshot() {
     snap.macro.push({ name: 'Volatilität', sub: vixQuote.sub || VIX_PROXY.sub, price: vixQuote.price, changePct: vixQuote.changePct, inverse: true });
   }
 
+  // Punkt 18: EUR/USD-Fallback (EZB-Referenzkurs via Frankfurter) —
+  // nur wenn Twelve Data keinen Live-Kurs geliefert hat.
+  if (!snap.macro.some(m => m.name === 'EUR/USD') && frankfurterEURUSD && frankfurterEURUSD.price > 0) {
+    snap.macro.push({ name: 'EUR/USD', sub: 'EZB-Referenzkurs ' + (frankfurterEURUSD.date || ''),
+                      price: frankfurterEURUSD.price, changePct: 0, refOnly: true });
+  }
+
+  // Punkt 17: EZB & Konjunktur — Zinsen und Inflation für Rendering + Claude.
+  snap.ezb = [];
+  if (ecbMacro) {
+    const fmtPct = v => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %';
+    const push = (obj, name) => {
+      if (obj && isFinite(obj.value)) snap.ezb.push({ name, valueStr: fmtPct(obj.value), value: obj.value, period: obj.period || '' });
+    };
+    push(ecbMacro.ezbEinlagenzins, 'EZB-Einlagenzins');
+    push(ecbMacro.bund10y,         'Bund-Rendite 10J');
+    push(ecbMacro.inflationDE,     'Inflation Deutschland');
+    push(ecbMacro.inflationEZ,     'Inflation Eurozone');
+  }
+
   // Swiss from Twelve Data
   for (const s of SWISS_SYMBOLS) {
     const live = swissPrices[s.key];
@@ -2207,6 +2304,11 @@ function snapshotToText(snap) {
   if (snap.swiss.length)  lines.push('Schweiz: ' + snap.swiss.map(fmt).join(' | '));
   if (snap.crypto.length) lines.push('Krypto: ' + snap.crypto.map(fmt).join(' | '));
   if (snap.macro.length)  lines.push('Rohstoffe/FX/Volatilität: ' + snap.macro.map(fmt).join(' | ') + (snap.macro.some(m=>m.name==='Volatilität') ? ' [Hinweis: steigende Volatilität = Risk-off]' : ''));
+  // Punkt 17: EZB & Konjunktur als eigener Faktenblock für Claude
+  if (snap.ezb && snap.ezb.length) {
+    lines.push('EZB & Konjunktur (Tages-/Monatsdaten, kein Intraday): ' +
+      snap.ezb.map(e => `${e.name}: ${e.valueStr}${e.period ? ' (Stand ' + e.period + ')' : ''}`).join(' | '));
+  }
   if (snap.stocks.length) lines.push('Einzelaktien: ' + snap.stocks.map(fmt).join(' | '));
   // Scanner-Top-Mover: gibt Claude Sicht auf ALLE gescannten Einzelwerte
   if (scanResults.length) {
@@ -2426,6 +2528,14 @@ function renderBrief(b, priceSourceLive, snapshot) {
       const isForex = m.name === 'EUR/USD';
       const isVol = m.inverse === true; // Punkt 12: Volatilität — Farblogik invertiert
       const p = isForex ? m.price.toFixed(4) : m.price.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+      // Punkt 18: EZB-Referenzkurs hat keine Intraday-Änderung → kein Pfeil
+      if (m.refOnly) {
+        return `
+      <li class="macro-item">
+        <span class="macro-key">${esc(m.name)} <span style="font-size:8px;color:var(--muted)">(${esc(m.sub||'')})</span></span>
+        <span class="macro-val">${esc(p)}</span>
+      </li>`;
+      }
       const chg = m.changePct || 0;
       const arrow = chg >= 0 ? '▲' : '▼';
       const valStr = (isForex ? p : '$' + p) + ' ' + arrow + ' ' + (chg>=0?'+':'') + chg.toFixed(1) + '%';
@@ -2440,6 +2550,33 @@ function renderBrief(b, priceSourceLive, snapshot) {
     }).join('');
   } else {
     document.getElementById('macro-list').innerHTML = `<li style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Twelve Data Key nötig für Gold, Öl, EUR/USD.</li>`;
+  }
+
+  // Punkt 17: EZB & Konjunktur — Tages-/Monatsdaten von EZB + Bundesbank.
+  // Kein Live-Punkt (●), stattdessen Stand-Datum. Inflation über 3% wird
+  // gelb markiert, Werte darunter neutral — bewusst KEINE grün/rot-Wertung
+  // (ob Zinsen "gut" sind, hängt von der Perspektive ab).
+  const ezbEl = document.getElementById('ezb-list');
+  if (ezbEl) {
+    if (snapshot.ezb && snapshot.ezb.length) {
+      ezbEl.innerHTML = snapshot.ezb.map(e => {
+        const warn = e.name.startsWith('Inflation') && e.value > 3;
+        return `
+      <li class="macro-item">
+        <span class="macro-key">${esc(e.name)} <span style="font-size:8px;color:var(--muted)">(${esc(e.period)})</span></span>
+        <span class="macro-val" ${warn ? 'style="color:var(--yellow)"' : ''}>${esc(e.valueStr)}</span>
+      </li>`;
+      }).join('');
+      const zins = snapshot.ezb.find(e => e.name === 'EZB-Einlagenzins');
+      const infDE = snapshot.ezb.find(e => e.name === 'Inflation Deutschland');
+      const parts = [];
+      if (zins) parts.push('Leitzins ' + zins.valueStr);
+      if (infDE) parts.push('Inflation DE ' + infDE.valueStr);
+      setSummary('sum-ezb', parts.join(' · ') || snapshot.ezb[0].name + ' ' + snapshot.ezb[0].valueStr);
+    } else {
+      ezbEl.innerHTML = `<li style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">EZB/Bundesbank-Daten nicht erreichbar.<br>Worker aktualisieren (Route /macro).</li>`;
+      setSummary('sum-ezb', 'Keine Daten');
+    }
   }
 
   const topicCls = { positive:'tag-pos', negative:'tag-neg', neutral:'tag-neu' };
