@@ -1154,8 +1154,8 @@ const TD_CACHE_KEY = 'mb_td_cache';      // Punkt 11: 60s-Cache gegen Twelve-Dat
 const TD_CACHE_TS  = 'mb_td_cache_ts';
 const IDX_CACHE_KEY = 'mb_idx_cache';    // Punkt 16: 60s-Cache für Worker-Indizes
 const IDX_CACHE_TS  = 'mb_idx_cache_ts';
-const ECB_CACHE_KEY = 'mb_ecb_cache';    // Punkt 17: 6h-Cache für EZB/Bundesbank-Daten
-const ECB_CACHE_TS  = 'mb_ecb_cache_ts';
+const ECB_CACHE_KEY = 'mb_ecb_cache2';   // Punkt 17: Cache für EZB/Bundesbank-Daten (v2: Schlüssel gewechselt, um Teilstände zu verwerfen)
+const ECB_CACHE_TS  = 'mb_ecb_cache2_ts';
 const FRK_CACHE_KEY = 'mb_frk_cache';    // Punkt 18: 1h-Cache für Frankfurter (EZB-Referenzkurs)
 const FRK_CACHE_TS  = 'mb_frk_cache_ts';
 const NOTIFY_KEY   = 'mb_notify';        // Punkt 14
@@ -1437,14 +1437,19 @@ async function fetchYahooIndices() {
 // Tages-/Monatsdaten → 6h-Cache in localStorage genügt völlig.
 let ecbMacro = null; // { ezbEinlagenzins, inflationEZ, inflationDE, bund10y } je {value, period}
 async function fetchEcbMacro() {
+  // Vollständige Datensätze 6h cachen, unvollständige nur 15 min —
+  // so heilt sich ein Teilausfall (z.B. eine API down) schnell von selbst.
+  const isComplete = d => !!(d && d.ezbEinlagenzins && d.inflationEZ && d.inflationDE && d.bund10y);
   try {
+    const cached = JSON.parse(localStorage.getItem(ECB_CACHE_KEY) || 'null');
     const cacheTs = parseInt(localStorage.getItem(ECB_CACHE_TS) || '0');
-    if (Date.now() - cacheTs < 6 * 60 * 60 * 1000) {
-      ecbMacro = JSON.parse(localStorage.getItem(ECB_CACHE_KEY) || 'null');
-      if (ecbMacro) return;
+    const ttl = isComplete(cached) ? 6 * 60 * 60 * 1000 : 15 * 60 * 1000;
+    if (cached && Date.now() - cacheTs < ttl) {
+      ecbMacro = cached;
+      return;
     }
     const r = await fetch(MACRO_ENDPOINT);
-    if (!r.ok) return;
+    if (!r.ok) { ecbMacro = ecbMacro || cached; return; }
     const d = await r.json();
     if (d && (d.ezbEinlagenzins || d.inflationEZ || d.inflationDE || d.bund10y)) {
       ecbMacro = d;
@@ -1452,6 +1457,8 @@ async function fetchEcbMacro() {
         localStorage.setItem(ECB_CACHE_KEY, JSON.stringify(d));
         localStorage.setItem(ECB_CACHE_TS, String(Date.now()));
       } catch {}
+    } else if (cached) {
+      ecbMacro = cached; // lieber alte Daten als gar keine
     }
   } catch (e) { /* Karte zeigt dann "keine Daten" */ }
 }
