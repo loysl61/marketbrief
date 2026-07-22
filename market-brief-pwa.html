@@ -1140,6 +1140,7 @@ const PROXY_BASE   = 'https://marketbriefproxy.loysl61.workers.dev';
 const API_ENDPOINT = PROXY_BASE + '/';               // Anthropic-Proxy (POST, wie bisher)
 const INDICES_ENDPOINT = PROXY_BASE + '/indices';    // Punkt 16: echte Indizes via Worker (Yahoo)
 const MACRO_ENDPOINT   = PROXY_BASE + '/macro';      // Punkt 17: EZB + Bundesbank via Worker
+const NEWS_DE_ENDPOINT = PROXY_BASE + '/news';       // Punkt 19: deutsche Wirtschafts-RSS via Worker
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
 const TWELVEDATA_BASE = 'https://api.twelvedata.com';
@@ -1384,7 +1385,7 @@ function getCached(allowStale = false) {
 }
 function setCache(brief, snapshot, news) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ brief, snapshot, news }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ brief, snapshot, news, deNews: germanNews }));
     localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
   } catch {}
 }
@@ -1640,6 +1641,26 @@ async function fetchMarketNews(fhKey) {
   } catch (e) {
     currentNews = [];
   }
+}
+
+
+// ── Punkt 19: Deutsche Wirtschaftsnachrichten via Worker-RSS ──
+// tagesschau, n-tv, DW, finanzen.net — kein Key nötig. Ergänzt die
+// (englischen, US-lastigen) Finnhub-News um die deutsche Perspektive.
+let germanNews = []; // gleiche Form wie currentNews: {headline, source, datetime, url}
+async function fetchGermanNews() {
+  germanNews = [];
+  try {
+    const r = await fetch(NEWS_DE_ENDPOINT);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (Array.isArray(d)) {
+      germanNews = d
+        .filter(n => n && n.headline)
+        .slice(0, 10)
+        .map(n => ({ headline: n.headline, source: n.source || 'DE', datetime: n.datetime || 0, url: n.url || '', de: true }));
+    }
+  } catch (e) { /* deutsche News sind optional — App läuft ohne weiter */ }
 }
 
 
@@ -2128,6 +2149,8 @@ async function loadBrief(silent = false) {
     // 1c) Fetch latest market news (Finnhub) — feeds the analysis
     if (!silent) setLoading('Lade Marktnachrichten…');
     await fetchMarketNews(fhKey || '');
+    // Punkt 19: deutsche Schlagzeilen dazu (keyless via Worker)
+    await fetchGermanNews();
 
     // 1d) Chancen-Scanner: Watchlist + Top-Krypto scannen
     if (!silent) setLoading('Scanne Einzelwerte…');
@@ -2189,6 +2212,7 @@ async function loadBrief(silent = false) {
     if (stale && stale.brief && stale.snapshot) {
       isOfflineView = true;
       currentNews = stale.news || [];
+      germanNews = stale.deNews || [];
       try {
         renderBrief(stale.brief, false, stale.snapshot);
         const pf = getPortfolio();
@@ -2334,12 +2358,18 @@ async function fetchBriefFromClaude(key, snapshot, news) {
   const newsText = (news && news.length)
     ? news.map((n, i) => `${i+1}. ${n.headline}${n.summary ? ' — ' + n.summary : ''} (${n.source})`).join('\n')
     : '';
+  // Punkt 19: deutsche Schlagzeilen als eigener Block — gibt der Analyse
+  // die deutsche/europäische Perspektive (DAX, EZB, Konjunktur).
+  const deNewsText = (germanNews && germanNews.length)
+    ? germanNews.map((n, i) => `${i+1}. ${n.headline} (${n.source})`).join('\n')
+    : '';
   const prompt = `Du bist ein erfahrener Finanzanalyst. Heute ist ${today}.
 
 Dir liegen die folgenden ECHTEN, AKTUELLEN Live-Kursdaten von heute vor. Stütze deine GESAMTE Analyse ausschließlich auf diese Zahlen — erfinde keine eigenen Kurse, spekuliere nicht über Werte, die hier nicht stehen:
 
 ${liveData || '(Keine Live-Daten verfügbar — gib eine vorsichtige, allgemeine Einordnung ohne konkrete Kurse.)'}
 ${newsText ? `\nAKTUELLE MARKT-SCHLAGZEILEN von heute (nutze diese, um die Bewegungen zu ERKLÄREN und konkrete Themen/Risiken/Chancen abzuleiten):\n\n${newsText}\n` : ''}
+${deNewsText ? `\nDEUTSCHE WIRTSCHAFTS-SCHLAGZEILEN von heute (tagesschau, n-tv, DW, finanzen.net — nutze sie, um DAX-Bewegungen, EZB-Politik und die deutsche Konjunktur einzuordnen; beziehe die deutsche/europäische Perspektive AKTIV in Analyse, Themen und Risiken ein):\n\n${deNewsText}\n` : ''}
 Erstelle auf Basis DIESER Daten${newsText ? ' und Schlagzeilen' : ''} eine Analyse. Antworte NUR mit einem validen JSON-Objekt — kein Markdown, keine Backticks:
 
 {
@@ -2605,20 +2635,26 @@ function renderBrief(b, priceSourceLive, snapshot) {
   // News — live headlines from Finnhub
   const newsEl = document.getElementById('news-list');
   if (newsEl) {
-    if (currentNews && currentNews.length) {
-      newsEl.innerHTML = currentNews.map(n => {
+    // Punkt 19: deutsche + Finnhub-Schlagzeilen gemischt, neueste zuerst
+    const allNews = [...(germanNews || []), ...(currentNews || [])]
+      .sort((a, b) => (b.datetime || 0) - (a.datetime || 0))
+      .slice(0, 14);
+    if (allNews.length) {
+      newsEl.innerHTML = allNews.map(n => {
         const t = new Date(n.datetime * 1000);
         const timeStr = t.toLocaleString('de-DE', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
         const link = n.url ? `href="${esc(n.url)}" target="_blank" rel="noopener"` : '';
+        const badge = n.de ? `<span style="font-size:8px;background:var(--border);border-radius:3px;padding:1px 4px;margin-right:4px">DE</span>` : '';
         return `<a class="news-item" ${link}>
           <div class="news-headline">${esc(n.headline)}</div>
-          <div class="news-meta"><span class="news-source">${esc(n.source)}</span><span>${timeStr}</span></div>
+          <div class="news-meta"><span class="news-source">${badge}${esc(n.source)}</span><span>${timeStr}</span></div>
         </a>`;
       }).join('');
-      setSummary('sum-news', `${currentNews.length} Meldungen · ${esc((currentNews[0].headline||'').slice(0,40))}…`);
+      const deCount = allNews.filter(n => n.de).length;
+      setSummary('sum-news', `${allNews.length} Meldungen (${deCount} DE) · ${esc((allNews[0].headline||'').slice(0,36))}…`);
     } else {
-      newsEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Keine Schlagzeilen geladen. Finnhub Key nötig.</div>`;
-      setSummary('sum-news', 'Finnhub Key nötig');
+      newsEl.innerHTML = `<div style="padding:12px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Keine Schlagzeilen geladen.</div>`;
+      setSummary('sum-news', 'Keine Schlagzeilen');
     }
   }
 
